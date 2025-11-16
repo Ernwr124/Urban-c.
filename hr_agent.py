@@ -1,35 +1,45 @@
 """
-Single-file FastAPI application for the HR Agent SaaS landing page.
+HR Agent single-file FastAPI app.
 
-The file embeds:
-- FastAPI application with HTML landing page served via inline Jinja2 template
-- SQLite storage for early-access leads
-- Optional Ollama-powered copy generator (disabled unless explicitly requested)
+Содержит лендинг, регистрацию, вход и раздельные кабинеты для кандидатов и HR,
+а также хранит данные в SQLite и использует встроенные HTML/CSS/JS шаблоны.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import random
+import re
+import secrets
 import sqlite3
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from jinja2 import BaseLoader, Environment
 from pydantic import BaseModel, EmailStr, Field, validator
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.status import HTTP_303_SEE_OTHER
 
 APP_TITLE = "HR Agent — платформа точного подбора"
 DB_PATH = Path(__file__).with_name("hr_agent.db")
 OLLAMA_MODEL = "gpt-oss:20b-cloud"
+SESSION_SECRET = os.getenv("HR_AGENT_SESSION_SECRET", secrets.token_hex(32))
+PASSWORD_SALT = os.getenv("HR_AGENT_PASSWORD_SALT", "hr-agent-salt")
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def init_db() -> None:
-    """Create SQLite tables required for the landing page interactions."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -47,16 +57,107 @@ def init_db() -> None:
     )
     cursor.execute(
         """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('candidate','hr')),
+            org_type TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS candidate_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            resume_excerpt TEXT NOT NULL,
+            job_focus TEXT NOT NULL,
+            matched_keywords TEXT,
+            missing_keywords TEXT,
+            score INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """
+    )
+    cursor.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_leads_role_created
         ON leads (role, created_at DESC)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_candidate_submissions_user_created
+        ON candidate_submissions (user_id, created_at DESC)
         """
     )
     conn.commit()
     conn.close()
 
 
+def hash_password(password: str) -> str:
+    return hashlib.sha256(f"{PASSWORD_SALT}:{password}".encode("utf-8")).hexdigest()
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    return hash_password(password) == stored_hash
+
+
+def create_user(name: str, email: str, password: str, role: str, org_type: Optional[str]) -> int:
+    normalized_email = email.strip().lower()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (normalized_email,))
+    if cursor.fetchone():
+        conn.close()
+        raise ValueError("Пользователь с такой почтой уже зарегистрирован.")
+    if role == "hr" and not org_type:
+        conn.close()
+        raise ValueError("Укажите тип организации.")
+    cursor.execute(
+        """
+        INSERT INTO users (name, email, password_hash, role, org_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            name.strip(),
+            normalized_email,
+            hash_password(password),
+            role,
+            org_type if role == "hr" else None,
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return int(new_id)
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def store_lead(payload: Dict[str, Any]) -> int:
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -80,27 +181,108 @@ def store_lead(payload: Dict[str, Any]) -> int:
 
 
 def get_metrics() -> Dict[str, int]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM leads")
-    total = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM leads WHERE role = 'candidate'")
-    candidates = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM leads WHERE role = 'hr'")
+    leads = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'candidate'")
+    registered_candidates = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'hr'")
     hr_partners = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM candidate_submissions")
+    analyses = cursor.fetchone()[0]
     conn.close()
     return {
-        "total": total,
-        "candidates": candidates,
+        "leads": leads,
+        "registered_candidates": registered_candidates,
         "hr_partners": hr_partners,
+        "analyses": analyses,
     }
+
+
+def save_candidate_submission(
+    user_id: int,
+    resume_text: str,
+    job_text: str,
+    matched: List[str],
+    missing: List[str],
+    score: int,
+) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO candidate_submissions (
+            user_id, resume_excerpt, job_focus, matched_keywords, missing_keywords, score, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            resume_text[:800],
+            job_text[:800],
+            ", ".join(matched) if matched else "",
+            ", ".join(missing) if missing else "",
+            score,
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_candidate_history(user_id: int, limit: int = 5) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT resume_excerpt, job_focus, matched_keywords, missing_keywords, score, created_at
+        FROM candidate_submissions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (user_id, limit),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def search_candidate_submissions(keyword: Optional[str], name: Optional[str]) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = """
+        SELECT cs.resume_excerpt, cs.job_focus, cs.matched_keywords, cs.missing_keywords,
+               cs.score, cs.created_at, u.name AS user_name, u.email
+        FROM candidate_submissions cs
+        JOIN users u ON cs.user_id = u.id
+    """
+    conditions = []
+    params: List[Any] = []
+    if keyword:
+        like = f"%{keyword.lower()}%"
+        conditions.append(
+            "(LOWER(cs.resume_excerpt) LIKE ? OR LOWER(cs.job_focus) LIKE ? OR LOWER(cs.matched_keywords) LIKE ?)"
+        )
+        params.extend([like, like, like])
+    if name:
+        like_name = f"%{name.lower()}%"
+        conditions.append("LOWER(u.name) LIKE ?")
+        params.append(like_name)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY cs.created_at DESC LIMIT 25"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 def should_use_ollama() -> bool:
     return os.getenv("HR_AGENT_USE_OLLAMA", "").lower() in {"1", "true", "yes"}
 
 
-def ollama_tagline(prompt: str) -> str | None:
+def ollama_tagline(prompt: str) -> Optional[str]:
     if not should_use_ollama():
         return None
     try:
@@ -121,8 +303,8 @@ def ollama_tagline(prompt: str) -> str | None:
 def choose_tagline() -> str:
     base_options = [
         "Соединяем сильных кандидатов и HR-команды быстрее рынка",
-        "Интеллектуальный ассистент по подбору IT-талантов",
-        "Показываем релевантность каждого резюме до общения",
+        "Интеллектуальный помощник по подбору IT-талантов",
+        "Релевантность резюме видна до первого созвона",
         "Контролируем точность сопоставления кандидатов и ролей",
     ]
     prompt = (
@@ -133,12 +315,34 @@ def choose_tagline() -> str:
     return generated or random.choice(base_options)
 
 
+def tokenize(text: str) -> List[str]:
+    tokens = re.findall(r"[a-zA-Zа-яА-Я0-9+#]+", text.lower())
+    return [token for token in tokens if len(token) > 2]
+
+
+def simple_resume_analysis(resume_text: str, job_text: str) -> Dict[str, Any]:
+    resume_tokens = set(tokenize(resume_text))
+    job_tokens = set(tokenize(job_text))
+    matched = sorted(job_tokens & resume_tokens)
+    missing = sorted(job_tokens - resume_tokens)
+    overlap_ratio = len(matched) / max(len(job_tokens), 1)
+    score = int(min(1.0, overlap_ratio) * 100)
+    if not job_tokens:
+        score = min(40, len(resume_tokens))
+    score = max(20, min(98, score + min(len(matched) * 3, 25)))
+    summary = (
+        f"Совпало {len(matched)} ключевых навыков из {max(len(job_tokens), 1)} "
+        f"заявленных в описании роли."
+    )
+    return {"score": score, "matched": matched, "missing": missing, "summary": summary}
+
+
 class InterestPayload(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     email: EmailStr
     role: str = Field(..., description="candidate or hr")
-    company: str | None = Field(default=None, max_length=160)
-    message: str | None = Field(default=None, max_length=1000)
+    company: Optional[str] = Field(default=None, max_length=160)
+    message: Optional[str] = Field(default=None, max_length=1000)
 
     @validator("role")
     def validate_role(cls, v: str) -> str:
@@ -168,210 +372,74 @@ LANDING_TEMPLATE = """
             --muted: #9aa0bd;
             --border: rgba(255,255,255,0.08);
             --success: #4ade80;
-            --warning: #facc15;
         }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
         body {
             background: radial-gradient(circle at top, rgba(111,106,248,0.25), transparent 50%), var(--bg);
             color: var(--text);
-            line-height: 1.6;
         }
-        .page {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 40px 20px 80px;
-        }
-        header.hero {
-            padding: 60px 0 40px;
-        }
+        .page { max-width: 1100px; margin: 0 auto; padding: 40px 20px 80px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .logo { font-weight: 600; letter-spacing: 0.05em; color: var(--accent-soft); }
+        .nav-actions { display: flex; gap: 12px; align-items: center; }
+        .ghost-link { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
+        header.hero { padding: 40px 0 30px; }
         .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            background: rgba(111,106,248,0.12);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--accent-soft);
+            display: inline-flex; gap: 8px; padding: 6px 14px; background: rgba(111,106,248,0.12);
+            border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; letter-spacing: 0.08em;
         }
-        h1 {
-            font-size: clamp(2rem, 5vw, 3.3rem);
-            margin: 20px 0;
-            line-height: 1.15;
-        }
-        .hero p {
-            max-width: 620px;
-            color: var(--muted);
-            font-size: 1.05rem;
-        }
-        .hero-actions {
-            margin-top: 32px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
+        h1 { font-size: clamp(2rem, 5vw, 3.3rem); margin: 18px 0; line-height: 1.15; }
+        .hero p { max-width: 640px; color: var(--muted); font-size: 1.05rem; }
+        .hero-actions { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 14px; }
         .btn {
-            border: none;
-            padding: 14px 28px;
-            border-radius: 999px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: none; padding: 12px 24px; border-radius: 999px; font-size: 0.95rem;
+            cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .btn.primary {
-            background: linear-gradient(120deg, var(--accent), var(--accent-strong));
-            color: #fff;
-            box-shadow: 0 15px 30px rgba(111,106,248,0.2);
-        }
-        .btn.secondary {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
-        .btn:hover {
-            transform: translateY(-2px);
-        }
+        .btn.primary { background: linear-gradient(120deg, var(--accent), var(--accent-strong)); color: #fff; }
+        .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn.small { padding: 8px 18px; font-size: 0.9rem; }
         section {
-            margin-top: 60px;
-            background: var(--card);
-            padding: 32px;
-            border-radius: 24px;
-            border: 1px solid var(--border);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            margin-top: 50px; background: var(--card); padding: 30px; border-radius: 24px;
+            border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.16);
         }
-        section header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 28px;
-        }
-        section header h2 {
-            font-size: 1.5rem;
-        }
-        .trust-logos {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 16px;
-            color: var(--muted);
-        }
-        .badge {
-            padding: 10px 14px;
-            border-radius: 18px;
-            background: var(--card-muted);
-            border: 1px solid var(--border);
-            text-align: center;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-            gap: 18px;
-        }
-        .card {
-            background: var(--card-muted);
-            border-radius: 20px;
-            padding: 20px;
-            border: 1px solid var(--border);
-        }
-        .card h3 {
-            margin-bottom: 8px;
-            font-size: 1.1rem;
-        }
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
-        }
-        .metric {
-            text-align: center;
-            padding: 18px;
-            background: var(--card-muted);
-            border-radius: 16px;
-            border: 1px solid var(--border);
-        }
-        .metric strong {
-            font-size: 1.8rem;
-            display: block;
-        }
-        .timeline {
-            display: grid;
-            gap: 14px;
-        }
-        .timeline-step {
-            padding: 18px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            background: rgba(111,106,248,0.08);
-        }
-        .timeline-step span {
-            font-size: 2rem;
-            color: var(--accent-soft);
-        }
-        .testimonials {
-            display: grid;
-            gap: 18px;
-        }
-        .testimonial {
-            border-radius: 20px;
-            padding: 20px;
-            background: rgba(255,255,255,0.02);
-            border: 1px solid var(--border);
-        }
-        .faq-item {
-            padding: 16px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .faq-item:last-child {
-            border-bottom: none;
-        }
-        form {
-            display: grid;
-            gap: 14px;
-        }
-        label {
-            font-size: 0.95rem;
-            color: var(--muted);
-        }
+        section header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+        .card { background: var(--card-muted); border-radius: 20px; padding: 20px; border: 1px solid var(--border); }
+        .card h3 { margin-bottom: 8px; font-size: 1.1rem; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+        .metric { padding: 18px; background: var(--card-muted); border-radius: 16px; border: 1px solid var(--border); }
+        .metric strong { font-size: 1.8rem; display: block; margin-bottom: 6px; }
+        .timeline { display: grid; gap: 14px; }
+        .timeline-step { padding: 18px; border-radius: 16px; border: 1px solid var(--border); background: rgba(111,106,248,0.08); }
+        .faq-item { padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        form { display: grid; gap: 14px; }
         input, select, textarea {
-            width: 100%;
-            padding: 14px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            background: rgba(255,255,255,0.02);
-            color: var(--text);
-            font-size: 1rem;
+            width: 100%; padding: 14px; border-radius: 14px; border: 1px solid var(--border);
+            background: rgba(255,255,255,0.02); color: var(--text); font-size: 1rem;
         }
-        textarea {
-            min-height: 130px;
-        }
-        .form-status {
-            font-size: 0.95rem;
-            min-height: 24px;
-        }
+        textarea { min-height: 120px; }
+        .form-status { font-size: 0.95rem; min-height: 24px; }
         @media (max-width: 640px) {
-            section {
-                padding: 22px;
-            }
-            header.hero {
-                padding-top: 30px;
-            }
-            .hero-actions {
-                flex-direction: column;
-            }
+            section { padding: 22px; }
+            .hero-actions { flex-direction: column; align-items: flex-start; }
+            .top-nav { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
 </head>
 <body>
     <div class="page">
+        <nav class="top-nav">
+            <div class="logo">HR Agent</div>
+            <div class="nav-actions">
+                {% if user %}
+                    <a class="ghost-link" href="{{ '/candidate/dashboard' if user.role == 'candidate' else '/hr/dashboard' }}">Мой кабинет</a>
+                    <a class="btn secondary small" href="/logout">Выйти</a>
+                {% else %}
+                    <a class="ghost-link" href="/login">Войти</a>
+                    <a class="btn primary small" href="/register">Регистрация</a>
+                {% endif %}
+            </div>
+        </nav>
         <header class="hero">
             <div class="eyebrow">IT-рекрутинг без хаоса</div>
             <h1>{{ hero.tagline }}</h1>
@@ -384,20 +452,8 @@ LANDING_TEMPLATE = """
 
         <section>
             <header>
-                <h2>Команды, которые ждут релиз</h2>
-                <span class="eyebrow" style="gap:6px;">IT • Fintech • Продукт</span>
-            </header>
-            <div class="trust-logos">
-                {% for badge in trust_badges %}
-                <div class="badge">{{ badge }}</div>
-                {% endfor %}
-            </div>
-        </section>
-
-        <section>
-            <header>
                 <h2>Что получает кандидат</h2>
-                <span class="eyebrow">Прозрачное понимание шансов</span>
+                <span class="eyebrow">Прозрачная оценка профиля</span>
             </header>
             <div class="grid">
                 {% for feature in candidate_features %}
@@ -412,7 +468,7 @@ LANDING_TEMPLATE = """
         <section>
             <header>
                 <h2>Функции для HR-команд</h2>
-                <span class="eyebrow">Снижаем время найма</span>
+                <span class="eyebrow">Сокращаем время найма</span>
             </header>
             <div class="grid">
                 {% for feature in hr_features %}
@@ -426,21 +482,25 @@ LANDING_TEMPLATE = """
 
         <section>
             <header>
-                <h2>Цифры пилота</h2>
-                <span class="eyebrow">Обновляется автоматически</span>
+                <h2>Цифры закрытого запуска</h2>
+                <span class="eyebrow">Живые данные</span>
             </header>
             <div class="metrics">
                 <div class="metric">
-                    <strong>{{ metrics.candidates + 120 }}</strong>
-                    <span>IT-специалистов в очереди</span>
+                    <strong>{{ metrics.registered_candidates }}</strong>
+                    <span>Зарегистрированных кандидатов</span>
                 </div>
                 <div class="metric">
-                    <strong>{{ metrics.hr_partners + 12 }}</strong>
-                    <span>HR-команд на старте</span>
+                    <strong>{{ metrics.hr_partners }}</strong>
+                    <span>HR-команд в очереди</span>
                 </div>
                 <div class="metric">
-                    <strong>{{ metrics.total + 250 }}</strong>
-                    <span>Релевантных сопоставлений</span>
+                    <strong>{{ metrics.analyses }}</strong>
+                    <span>Проведённых анализов профиля</span>
+                </div>
+                <div class="metric">
+                    <strong>{{ metrics.leads }}</strong>
+                    <span>Заявок на ранний доступ</span>
                 </div>
             </div>
         </section>
@@ -456,21 +516,6 @@ LANDING_TEMPLATE = """
                     <span>{{ step.number }}</span>
                     <h3>{{ step.title }}</h3>
                     <p>{{ step.text }}</p>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
-
-        <section>
-            <header>
-                <h2>Отзывы пилотных команд</h2>
-                <span class="eyebrow">Beta community</span>
-            </header>
-            <div class="testimonials">
-                {% for quote in testimonials %}
-                <div class="testimonial">
-                    <p>“{{ quote.text }}”</p>
-                    <p style="margin-top:12px;color:var(--muted);font-size:0.95rem;">{{ quote.author }} — {{ quote.role }}</p>
                 </div>
                 {% endfor %}
             </div>
@@ -514,11 +559,11 @@ LANDING_TEMPLATE = """
                 </div>
                 <div>
                     <label for="company">Компания или роль</label>
-                    <input type="text" id="company" name="company" placeholder="Например, Senior Backend Engineer в X" />
+                    <input type="text" id="company" name="company" placeholder="Например, Senior Backend Engineer" />
                 </div>
                 <div>
                     <label for="message">Задачи или ожидания</label>
-                    <textarea id="message" name="message" placeholder="Опишите, с какими вызовами по подбору мы можем помочь"></textarea>
+                    <textarea id="message" name="message" placeholder="Опишите, как можем помочь."></textarea>
                 </div>
                 <button class="btn primary" type="submit">Получить доступ первым</button>
                 <div class="form-status" id="form-status"></div>
@@ -529,14 +574,12 @@ LANDING_TEMPLATE = """
     <script>
         const form = document.getElementById("interest-form");
         const statusBox = document.getElementById("form-status");
-
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
             statusBox.textContent = "Отправляем заявку...";
+            statusBox.style.color = "#f5f6fb";
             const formData = new FormData(form);
             const payload = Object.fromEntries(formData.entries());
-            payload.role = payload.role || "candidate";
-
             try {
                 const response = await fetch("/api/interest", {
                     method: "POST",
@@ -561,13 +604,313 @@ LANDING_TEMPLATE = """
 """
 
 
+AUTH_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(circle at top, rgba(111,106,248,0.25), #05060a);
+            color: #f5f6fb;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .auth-card {
+            width: min(420px, 100%);
+            background: rgba(13,16,32,0.9);
+            border-radius: 24px;
+            padding: 32px;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+        }
+        h1 { margin-bottom: 8px; }
+        p.subtitle { color: #a8aecb; margin-bottom: 24px; }
+        form { display: grid; gap: 16px; }
+        label { font-size: 0.9rem; color: #c7cbe2; }
+        input, select {
+            width: 100%; padding: 14px; border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: #fff; font-size: 1rem;
+        }
+        button {
+            border: none; padding: 14px; border-radius: 14px;
+            font-size: 1rem;
+            background: linear-gradient(120deg, #6f6af8, #8f83ff);
+            color: #fff;
+            cursor: pointer;
+        }
+        .error { color: #f87171; min-height: 20px; }
+        .success { color: #4ade80; min-height: 20px; }
+        .alt-link { margin-top: 14px; text-align: center; }
+        a { color: #8f83ff; }
+        .org-type { display: none; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <h1>{{ heading }}</h1>
+        <p class="subtitle">{{ subtitle }}</p>
+        <div class="error">{{ error or "" }}</div>
+        <div class="success">{{ success or "" }}</div>
+        <form method="post">
+            {% if mode == 'register' %}
+            <div>
+                <label for="role">Роль</label>
+                <select id="role" name="role" required>
+                    <option value="candidate" {% if form_data.role == 'candidate' %}selected{% endif %}>Кандидат</option>
+                    <option value="hr" {% if form_data.role == 'hr' %}selected{% endif %}>HR специалист</option>
+                </select>
+            </div>
+            {% endif %}
+            <div>
+                <label for="name">Имя</label>
+                <input type="text" id="name" name="name" required value="{{ form_data.name }}" />
+            </div>
+            <div>
+                <label for="email">Google аккаунт</label>
+                <input type="email" id="email" name="email" required value="{{ form_data.email }}" />
+            </div>
+            <div>
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password" required minlength="6" />
+            </div>
+            {% if mode == 'register' %}
+            <div class="org-type" id="org-wrapper">
+                <label for="org_type">Тип организации</label>
+                <select id="org_type" name="org_type">
+                    <option value="">Выберите</option>
+                    <option value="startup" {% if form_data.org_type == 'startup' %}selected{% endif %}>Стартап</option>
+                    <option value="company" {% if form_data.org_type == 'company' %}selected{% endif %}>Компания</option>
+                </select>
+            </div>
+            {% endif %}
+            <button type="submit">{{ submit_label }}</button>
+        </form>
+        <div class="alt-link">
+            {% if mode == 'register' %}
+            Уже есть аккаунт? <a href="/login">Войти</a>
+            {% else %}
+            Нет аккаунта? <a href="/register">Создать</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if mode == 'register' %}
+    <script>
+        const roleSelect = document.getElementById("role");
+        const orgWrapper = document.getElementById("org-wrapper");
+        function toggleOrgField() {
+            if (roleSelect.value === "hr") {
+                orgWrapper.style.display = "block";
+            } else {
+                orgWrapper.style.display = "none";
+            }
+        }
+        toggleOrgField();
+        roleSelect.addEventListener("change", toggleOrgField);
+    </script>
+    {% endif %}
+</body>
+</html>
+"""
+
+
+CANDIDATE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Кабинет кандидата — HR Agent</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #05060a; color: #f5f6fb; margin: 0; }
+        .page { max-width: 980px; margin: 0 auto; padding: 30px 20px 60px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn { border: none; padding: 10px 18px; border-radius: 999px; cursor: pointer; background: linear-gradient(120deg, #6f6af8, #8f83ff); color: #fff; }
+        h1 { margin-bottom: 10px; }
+        .subtitle { color: #a8aecb; margin-bottom: 24px; }
+        section { background: rgba(17,20,37,0.95); border-radius: 20px; padding: 24px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 24px; }
+        textarea {
+            width: 100%; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03); color: #fff; padding: 14px; min-height: 140px; font-size: 1rem;
+        }
+        label { display: block; margin-bottom: 8px; color: #a8aecb; }
+        .result-card {
+            margin-top: 14px; padding: 20px; border-radius: 18px;
+            background: rgba(79,70,229,0.18); border: 1px solid rgba(123,114,255,0.4);
+        }
+        .history-item { border-top: 1px solid rgba(255,255,255,0.05); padding: 14px 0; }
+        .history-item:first-child { border-top: none; }
+        .badge { display: inline-flex; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="top-nav">
+            <div>HR Agent · {{ user.name }}</div>
+            <div>
+                <a class="btn" href="/">На лендинг</a>
+                <a class="btn" style="margin-left:8px;background:#2f3146;" href="/logout">Выйти</a>
+            </div>
+        </div>
+        <h1>Кабинет кандидата</h1>
+        <p class="subtitle">Короткий лендинг со статусом аккаунта и инструментом анализа резюме.</p>
+
+        <section>
+            <h2>Анализ своего резюме</h2>
+            <form method="post" action="/candidate/analyze">
+                <div>
+                    <label for="resume_text">Вставьте текст резюме или ссылки на проекты</label>
+                    <textarea id="resume_text" name="resume_text" required>{{ form_data.resume_text }}</textarea>
+                </div>
+                <div style="margin-top:16px;">
+                    <label for="job_text">Опишите вакансию мечты</label>
+                    <textarea id="job_text" name="job_text" required>{{ form_data.job_text }}</textarea>
+                </div>
+                <button class="btn" type="submit" style="margin-top:18px;">Получить анализ</button>
+            </form>
+            {% if analysis %}
+            <div class="result-card">
+                <h3>Результат: {{ analysis.score }}%</h3>
+                <p>{{ analysis.summary }}</p>
+                <p class="badge">Совпадения: {{ analysis.matched|length }}</p>
+                {% if analysis.matched %}
+                <p>Ключевые совпадения: {{ analysis.matched|join(', ') }}</p>
+                {% endif %}
+                {% if analysis.missing %}
+                <p>Стоит добавить: {{ analysis.missing|join(', ') }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+        <section>
+            <h2>История последних анализов</h2>
+            {% if history %}
+                {% for item in history %}
+                <div class="history-item">
+                    <strong>{{ item.score }}%</strong> · {{ item.created_at }}
+                    <p style="color:#a8aecb;">{{ item.job_focus[:180] }}{% if item.job_focus|length > 180 %}...{% endif %}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Вы ещё не запускали анализ профиля.</p>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>
+"""
+
+
+HR_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Кабинет HR — HR Agent</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #05060a; color: #f5f6fb; margin: 0; }
+        .page { max-width: 1080px; margin: 0 auto; padding: 30px 20px 60px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn { border: none; padding: 10px 18px; border-radius: 999px; cursor: pointer; background: linear-gradient(120deg, #6f6af8, #8f83ff); color: #fff; }
+        section { background: rgba(17,20,37,0.95); border-radius: 20px; padding: 24px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 24px; }
+        input {
+            width: 100%; padding: 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03); color: #fff;
+        }
+        label { font-size: 0.9rem; color: #a8aecb; }
+        form { display: grid; gap: 14px; margin-bottom: 16px; }
+        .candidate-card { border-top: 1px solid rgba(255,255,255,0.08); padding: 16px 0; }
+        .candidate-card:first-child { border-top: none; }
+        .score { font-size: 1.4rem; color: #4ade80; }
+        .muted { color: #a8aecb; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="top-nav">
+            <div>HR Agent · {{ user.name }} ({{ user.org_type or 'HR' }})</div>
+            <div>
+                <a class="btn" href="/">На лендинг</a>
+                <a class="btn" style="margin-left:8px;background:#2f3146;" href="/logout">Выйти</a>
+            </div>
+        </div>
+        <h1>Кабинет HR специалиста</h1>
+        <p class="muted" style="margin-bottom:20px;">Поиск и сравнение кандидатов по данным анализа.</p>
+
+        <section>
+            <h2>Поиск кандидатов</h2>
+            <form method="get" action="/hr/dashboard">
+                <div>
+                    <label for="keyword">Ключевые навыки или стек</label>
+                    <input type="text" id="keyword" name="keyword" value="{{ keyword }}" placeholder="Go, Python, product..." />
+                </div>
+                <div>
+                    <label for="name">Имя кандидата</label>
+                    <input type="text" id="name" name="name" value="{{ name }}" placeholder="Введите имя" />
+                </div>
+                <button class="btn" type="submit" style="margin-top:10px;">Найти</button>
+            </form>
+
+            {% if results %}
+                {% for item in results %}
+                <div class="candidate-card">
+                    <div class="score">{{ item.score }}%</div>
+                    <strong>{{ item.user_name }}</strong> · {{ item.email }}
+                    <p class="muted">Фокус роли: {{ item.job_focus[:200] }}{% if item.job_focus|length > 200 %}...{% endif %}</p>
+                    {% if item.matched_keywords %}
+                    <p>Совпадения: {{ item.matched_keywords }}</p>
+                    {% endif %}
+                    {% if item.missing_keywords %}
+                    <p class="muted">Нужно усилить: {{ item.missing_keywords }}</p>
+                    {% endif %}
+                    <p class="muted">Создано: {{ item.created_at }}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Нет результатов. Попробуйте изменить фильтры.</p>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>
+"""
+
+
 env = Environment(loader=BaseLoader(), autoescape=True)
-template = env.from_string(LANDING_TEMPLATE)
+templates = {
+    "landing": env.from_string(LANDING_TEMPLATE),
+    "auth": env.from_string(AUTH_TEMPLATE),
+    "candidate": env.from_string(CANDIDATE_TEMPLATE),
+    "hr": env.from_string(HR_TEMPLATE),
+}
+
+
+def render_template(name: str, **context: Any) -> str:
+    return templates[name].render(**context)
+
 
 app = FastAPI(title=APP_TITLE)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, session_cookie="hragent_session")
 
 
-def build_context() -> Dict[str, Any]:
+def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return get_user_by_id(int(user_id))
+
+
+def build_context(user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     metrics = get_metrics()
     return {
         "meta": {
@@ -576,76 +919,33 @@ def build_context() -> Dict[str, Any]:
         },
         "hero": {
             "tagline": choose_tagline(),
-            "subtitle": "Кандидат загружает PDF-резюме, описывает роль мечты и сразу видит, насколько он совпадает с запросом. HR-команды получают ранжированный список и прозрачные объяснения сопоставлений.",
+            "subtitle": "Кандидат загружает PDF-резюме, описывает роль мечты и сразу видит, насколько он совпадает с запросом. HR-команды получают ранжированный список и объяснения сопоставлений.",
         },
-        "trust_badges": [
-            "Digital Native Teams",
-            "Product Studios",
-            "IT-рекрутеры",
-            "Fintech компании",
-            "Outstaff агентства",
-            "Scale-up стартапы",
-        ],
         "candidate_features": [
-            {
-                "title": "Мгновенная оценка релевантности",
-                "text": "Получите процент совпадения с ролью и понимание, какие навыки нужно усилить.",
-            },
-            {
-                "title": "Разбор сильных сторон",
-                "text": "Платформа подсвечивает ключевые проекты и компетенции, которые ценят HR-команды.",
-            },
-            {
-                "title": "План улучшения резюме",
-                "text": "Получайте рекомендации, с чего начать апгрейд, чтобы пройти фильтр компании мечты.",
-            },
-            {
-                "title": "Единый профиль",
-                "text": "Сохраните резюме, мотивацию и ссылки — для повторных откликов достаточно одного клика.",
-            },
+            {"title": "Мгновенная оценка", "text": "Процент совпадения с ролью и подсветка сильных сторон."},
+            {"title": "Рекомендации по росту", "text": "Понимайте, какие навыки усилить, чтобы пройти отбор."},
+            {"title": "Один профиль для откликов", "text": "Сохраняйте резюме, мотивацию и ссылки в одном месте."},
+            {"title": "История анализа", "text": "Возвращайтесь к прошлым результатам и отслеживайте прогресс."},
         ],
         "hr_features": [
-            {
-                "title": "Сопоставление за минуты",
-                "text": "Система готовит список кандидатов под конкретную вакансию и расставляет приоритеты.",
-            },
-            {
-                "title": "Пояснения к оценкам",
-                "text": "Каждый процент совпадения сопровождается разбором навыков и опыта, чтобы быстрее принять решение.",
-            },
-            {
-                "title": "Единый источник правды",
-                "text": "История обратной связи, заметки команды и статус кандидата синхронизированы в одном окне.",
-            },
-            {
-                "title": "Отчётность для бизнеса",
-                "text": "Показываем, как меняется воронка и на каком этапе застревают роли, чтобы доказывать эффективность.",
-            },
+            {"title": "Поиск кандидатов по навыкам", "text": "Фильтрация по ключевым словам и проценту совпадения."},
+            {"title": "Объяснимые оценки", "text": "Каждый результат сопровождается совпавшими и отсутствующими навыками."},
+            {"title": "Контроль воронки", "text": "На каком этапе застревают роли и почему."},
+            {"title": "Единая база", "text": "Все заявки и заметки хранятся централизованно в HR Agent."},
         ],
         "metrics": metrics,
         "timeline": [
-            {"number": "01", "title": "Загрузка резюме", "text": "Кандидат добавляет PDF и описывает роль мечты."},
-            {"number": "02", "title": "Анализ профиля", "text": "Сервис извлекает ключевые навыки и опыт до уровня абзаца."},
-            {"number": "03", "title": "Сопоставление", "text": "Сравниваем с требованиями HR-команд и отправляем кандидата тем, кому он подходит."},
-        ],
-        "testimonials": [
-            {
-                "text": "Мы получили первые релевантные профили для продуктовой команды вдвое быстрее, чем через привычные каналы.",
-                "author": "Анна Ковальская",
-                "role": "Head of Talent, fintech",
-            },
-            {
-                "text": "Кандидаты приходят уже подготовленными: понимают ожидания роли и где им нужно усилиться.",
-                "author": "Игорь Лебедев",
-                "role": "Lead Recruiter, SaaS",
-            },
+            {"number": "01", "title": "Загрузка резюме", "text": "Кандидат добавляет PDF или текст и описывает цель."},
+            {"number": "02", "title": "Анализ профиля", "text": "Сервис извлекает навыки и сопоставляет с ожиданиями роли."},
+            {"number": "03", "title": "Передача HR", "text": "HR получает готовый разбор и рейтинг совпадения."},
         ],
         "faq": [
-            {"q": "Кто может присоединиться к запуску?", "a": "Сейчас мы открываем доступ для IT-специалистов и HR-команд продуктовых компаний."},
-            {"q": "Когда стартует бета?", "a": "Закрытый запуск начнётся сразу после подтверждения инфраструктуры, ориентировочно в течение 4 недель."},
-            {"q": "Сколько это будет стоить?", "a": "Для пилотных команд доступ остаётся бесплатным до выхода в публичный релиз."},
-            {"q": "Как храните данные?", "a": "PDF и профили шифруются, доступ к ним ограничен командами, к которым кандидат дал разрешение."},
+            {"q": "Кто может присоединиться?", "a": "IT-специалисты и HR-команды продуктовых и сервисных компаний."},
+            {"q": "Когда стартует бета?", "a": "Первые приглашения отправим в течение ближайших недель после подтверждения нагрузки."},
+            {"q": "Сколько это стоит?", "a": "На этапе раннего доступа сервис бесплатный."},
+            {"q": "Как храните данные?", "a": "Резюме и профили шифруются и доступны только командам, которым кандидат дал доступ."},
         ],
+        "user": user,
     }
 
 
@@ -655,8 +955,187 @@ async def startup_event() -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def landing() -> HTMLResponse:
-    html = template.render(**build_context())
+async def landing(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    html = render_template("landing", **build_context(user))
+    return HTMLResponse(content=html)
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_form(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if user:
+        target = "/candidate/dashboard" if user["role"] == "candidate" else "/hr/dashboard"
+        return RedirectResponse(target, status_code=HTTP_303_SEE_OTHER)
+    html = render_template(
+        "auth",
+        title="Регистрация — HR Agent",
+        heading="Создать аккаунт",
+        subtitle="Выберите роль и получите доступ к закрытому запуску.",
+        mode="register",
+        error=None,
+        success=None,
+        submit_label="Зарегистрироваться",
+        form_data={"name": "", "email": "", "role": "candidate", "org_type": ""},
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/register", response_class=HTMLResponse)
+async def register_submit(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if user:
+        target = "/candidate/dashboard" if user["role"] == "candidate" else "/hr/dashboard"
+        return RedirectResponse(target, status_code=HTTP_303_SEE_OTHER)
+    form = await request.form()
+    name = form.get("name", "").strip()
+    email = form.get("email", "").strip()
+    password = form.get("password", "")
+    role = form.get("role", "candidate")
+    org_type = form.get("org_type", "").strip() or None
+    error = None
+    if len(name) < 2:
+        error = "Имя слишком короткое."
+    elif len(password) < 6:
+        error = "Пароль должен быть не короче 6 символов."
+    user_id = None
+    if not error:
+        try:
+            user_id = create_user(name, email, password, role, org_type)
+        except ValueError as exc:
+            error = str(exc)
+    if error:
+        html = render_template(
+            "auth",
+            title="Регистрация — HR Agent",
+            heading="Создать аккаунт",
+            subtitle="Выберите роль и получите доступ к закрытому запуску.",
+            mode="register",
+            error=error,
+            success=None,
+            submit_label="Зарегистрироваться",
+            form_data={"name": name, "email": email, "role": role, "org_type": org_type or ""},
+        )
+        return HTMLResponse(content=html, status_code=400)
+    request.session["user_id"] = user_id
+    request.session["role"] = role
+    target = "/candidate/dashboard" if role == "candidate" else "/hr/dashboard"
+    return RedirectResponse(target, status_code=HTTP_303_SEE_OTHER)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_form(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    next_url = request.query_params.get("next")
+    if user:
+        target = next_url or ("/candidate/dashboard" if user["role"] == "candidate" else "/hr/dashboard")
+        return RedirectResponse(target, status_code=HTTP_303_SEE_OTHER)
+    html = render_template(
+        "auth",
+        title="Вход — HR Agent",
+        heading="Войти в аккаунт",
+        subtitle="Используйте почту, с которой регистрировались.",
+        mode="login",
+        error=None,
+        success=None,
+        submit_label="Войти",
+        form_data={"name": "", "email": ""},
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request) -> HTMLResponse:
+    form = await request.form()
+    email = form.get("email", "").strip()
+    password = form.get("password", "")
+    next_url = request.query_params.get("next")
+    user = get_user_by_email(email)
+    if not user or not verify_password(password, user["password_hash"]):
+        html = render_template(
+            "auth",
+            title="Вход — HR Agent",
+            heading="Войти в аккаунт",
+            subtitle="Используйте почту, с которой регистрировались.",
+            mode="login",
+            error="Неверная почта или пароль.",
+            success=None,
+            submit_label="Войти",
+            form_data={"name": "", "email": email},
+        )
+        return HTMLResponse(content=html, status_code=401)
+    request.session["user_id"] = user["id"]
+    request.session["role"] = user["role"]
+    target = next_url or ("/candidate/dashboard" if user["role"] == "candidate" else "/hr/dashboard")
+    return RedirectResponse(target, status_code=HTTP_303_SEE_OTHER)
+
+
+@app.get("/logout")
+async def logout(request: Request) -> RedirectResponse:
+    request.session.clear()
+    return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.get("/candidate/dashboard", response_class=HTMLResponse)
+async def candidate_dashboard(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user or user["role"] != "candidate":
+        return RedirectResponse("/login?next=/candidate/dashboard", status_code=HTTP_303_SEE_OTHER)
+    history = get_candidate_history(user["id"])
+    html = render_template(
+        "candidate",
+        user=user,
+        analysis=None,
+        history=history,
+        form_data={"resume_text": "", "job_text": ""},
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/candidate/analyze", response_class=HTMLResponse)
+async def candidate_analyze(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user or user["role"] != "candidate":
+        return RedirectResponse("/login?next=/candidate/dashboard", status_code=HTTP_303_SEE_OTHER)
+    form = await request.form()
+    resume_text = form.get("resume_text", "").strip()
+    job_text = form.get("job_text", "").strip()
+    if not resume_text or not job_text:
+        history = get_candidate_history(user["id"])
+        html = render_template(
+            "candidate",
+            user=user,
+            analysis=None,
+            history=history,
+            form_data={"resume_text": resume_text, "job_text": job_text},
+        )
+        return HTMLResponse(content=html, status_code=400)
+    analysis = simple_resume_analysis(resume_text, job_text)
+    save_candidate_submission(user["id"], resume_text, job_text, analysis["matched"], analysis["missing"], analysis["score"])
+    history = get_candidate_history(user["id"])
+    html = render_template(
+        "candidate",
+        user=user,
+        analysis=analysis,
+        history=history,
+        form_data={"resume_text": "", "job_text": ""},
+    )
+    return HTMLResponse(content=html)
+
+
+@app.get("/hr/dashboard", response_class=HTMLResponse)
+async def hr_dashboard(request: Request, keyword: Optional[str] = None, name: Optional[str] = None) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user or user["role"] != "hr":
+        return RedirectResponse("/login?next=/hr/dashboard", status_code=HTTP_303_SEE_OTHER)
+    results = search_candidate_submissions(keyword, name)
+    html = render_template(
+        "hr",
+        user=user,
+        results=results,
+        keyword=keyword or "",
+        name=name or "",
+    )
     return HTMLResponse(content=html)
 
 
