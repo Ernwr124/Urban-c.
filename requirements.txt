@@ -13,3 +13,5 @@ pydantic
 python-multipart
 python-docx
 pdfminer.six
+duckduckgo-search
+openpyxl
