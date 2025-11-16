@@ -1,8 +1,10 @@
-flask
-flask_sqlalchemy
-flask_login
-werkzeug
-qrcode
+fastapi
+uvicorn
+sqlalchemy
+httpx
+passlib[bcrypt]
+python-multipart
+PyPDF2
+python-docx
 pillow
-reportlab
-apscheduler
+pytesseract
