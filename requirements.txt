@@ -6,3 +6,7 @@ qrcode
 pillow
 reportlab
 apscheduler
+fastapi
+uvicorn
+jinja2
+pydantic
