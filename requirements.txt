@@ -10,3 +10,6 @@ fastapi
 uvicorn
 jinja2
 pydantic
+python-multipart
+python-docx
+pdfminer.six

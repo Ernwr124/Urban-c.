@@ -8,6 +8,8 @@ HR Agent single-file FastAPI app.
 from __future__ import annotations
 
 import hashlib
+import io
+import json
 import os
 import random
 import re
@@ -18,10 +20,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from docx import Document
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from jinja2 import BaseLoader, Environment
+from pdfminer.high_level import extract_text as pdf_extract_text
 from pydantic import BaseModel, EmailStr, Field, validator
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
@@ -278,6 +283,114 @@ def search_candidate_submissions(keyword: Optional[str], name: Optional[str]) ->
     return [dict(row) for row in rows]
 
 
+def update_user_profile(
+    user_id: int,
+    *,
+    name: str,
+    email: str,
+    org_type: Optional[str],
+    new_password: Optional[str],
+) -> Dict[str, Any]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    normalized_email = email.strip().lower()
+    cursor.execute("SELECT id FROM users WHERE email = ? AND id <> ?", (normalized_email, user_id))
+    if cursor.fetchone():
+        conn.close()
+        raise ValueError("Эта почта уже используется.")
+    fields = ["name = ?", "email = ?"]
+    params: List[Any] = [name.strip(), normalized_email]
+    if org_type is not None:
+        fields.append("org_type = ?")
+        params.append(org_type)
+    if new_password:
+        fields.append("password_hash = ?")
+        params.append(hash_password(new_password))
+    params.append(user_id)
+    cursor.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", params)
+    conn.commit()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    updated = dict(cursor.fetchone())
+    conn.close()
+    return updated
+
+
+def extract_docx_text(data: bytes) -> str:
+    try:
+        document = Document(io.BytesIO(data))
+        return "\n".join(p.text for p in document.paragraphs if p.text).strip()
+    except Exception:
+        return ""
+
+
+def extract_pdf_text(data: bytes) -> str:
+    try:
+        return pdf_extract_text(io.BytesIO(data)).strip()
+    except Exception:
+        return ""
+
+
+async def upload_to_text(upload: StarletteUploadFile | None) -> str:
+    if not upload or not getattr(upload, "filename", None):
+        return ""
+    content = await upload.read()
+    if not content:
+        return ""
+    filename = (upload.filename or "").lower()
+    content_type = (upload.content_type or "").lower()
+    if filename.endswith(".pdf") or "pdf" in content_type:
+        text = extract_pdf_text(content)
+    elif filename.endswith(".docx") or "wordprocessingml" in content_type:
+        text = extract_docx_text(content)
+    elif filename.endswith(".doc"):
+        text = extract_docx_text(content)
+    else:
+        text = content.decode("utf-8", errors="ignore")
+    return text.strip()
+
+
+def analyze_with_llm(resume_text: str, job_text: str) -> Optional[Dict[str, Any]]:
+    if not should_use_ollama():
+        return None
+    prompt = (
+        "You are an AI HR analyst. Compare the candidate resume with the vacancy requirements. "
+        "Return JSON with keys: score (0-100 integer), matched_keywords (list of up to 8 short skills), "
+        "missing_keywords (list of up to 8 skills), summary (string <= 220 characters explaining fit). "
+        "Resume:\n"
+        f"{resume_text}\n\nVacancy:\n{job_text}"
+    )
+    try:
+        result = subprocess.run(
+            ["ollama", "run", OLLAMA_MODEL],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=45,
+            check=False,
+        )
+        raw_text = (result.stdout or "").strip()
+        json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+        payload = json.loads(json_match.group() if json_match else raw_text)
+        score = int(payload.get("score", 0))
+        matched = payload.get("matched_keywords", [])
+        missing = payload.get("missing_keywords", [])
+        if isinstance(matched, str):
+            matched = [item.strip() for item in matched.split(",") if item.strip()]
+        if isinstance(missing, str):
+            missing = [item.strip() for item in missing.split(",") if item.strip()]
+        return {
+            "score": max(0, min(100, score)),
+            "matched": matched or [],
+            "missing": missing or [],
+            "summary": payload.get("summary", "Анализ выполнен LLM-моделью."),
+            "engine": "llm",
+        }
+    except json.JSONDecodeError:
+        return None
+    except Exception:
+        return None
+
+
 def should_use_ollama() -> bool:
     return os.getenv("HR_AGENT_USE_OLLAMA", "").lower() in {"1", "true", "yes"}
 
@@ -334,7 +447,13 @@ def simple_resume_analysis(resume_text: str, job_text: str) -> Dict[str, Any]:
         f"Совпало {len(matched)} ключевых навыков из {max(len(job_tokens), 1)} "
         f"заявленных в описании роли."
     )
-    return {"score": score, "matched": matched, "missing": missing, "summary": summary}
+    return {
+        "score": score,
+        "matched": matched,
+        "missing": missing,
+        "summary": summary,
+        "engine": "heuristic",
+    }
 
 
 class InterestPayload(BaseModel):
@@ -382,6 +501,19 @@ LANDING_TEMPLATE = """
         .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .logo { font-weight: 600; letter-spacing: 0.05em; color: var(--accent-soft); }
         .nav-actions { display: flex; gap: 12px; align-items: center; }
+        .profile-button {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--card-muted);
+            color: var(--accent-soft);
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
         .ghost-link { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
         header.hero { padding: 40px 0 30px; }
         .eyebrow {
@@ -433,6 +565,7 @@ LANDING_TEMPLATE = """
             <div class="nav-actions">
                 {% if user %}
                     <a class="ghost-link" href="{{ '/candidate/dashboard' if user.role == 'candidate' else '/hr/dashboard' }}">Мой кабинет</a>
+                    <a class="profile-button" href="/profile">{{ user.name[:1]|upper }}</a>
                     <a class="btn secondary small" href="/logout">Выйти</a>
                 {% else %}
                     <a class="ghost-link" href="/login">Войти</a>
@@ -749,6 +882,21 @@ CANDIDATE_TEMPLATE = """
         .history-item { border-top: 1px solid rgba(255,255,255,0.05); padding: 14px 0; }
         .history-item:first-child { border-top: none; }
         .badge { display: inline-flex; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); font-size: 0.85rem; }
+        .profile-button {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: #2f3146;
+            color: #c5c8ff;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .hint { color: #9fa5c7; font-size: 0.9rem; margin-top: 6px; }
+        .error { color: #f87171; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -757,6 +905,7 @@ CANDIDATE_TEMPLATE = """
             <div>HR Agent · {{ user.name }}</div>
             <div>
                 <a class="btn" href="/">На лендинг</a>
+                <a class="profile-button" style="margin-left:8px;" href="/profile">{{ user.name[:1]|upper }}</a>
                 <a class="btn" style="margin-left:8px;background:#2f3146;" href="/logout">Выйти</a>
             </div>
         </div>
@@ -765,16 +914,22 @@ CANDIDATE_TEMPLATE = """
 
         <section>
             <h2>Анализ своего резюме</h2>
-            <form method="post" action="/candidate/analyze">
+            <form method="post" action="/candidate/analyze" enctype="multipart/form-data">
+                {% if form_error %}
+                <div class="error">{{ form_error }}</div>
+                {% endif %}
                 <div>
-                    <label for="resume_text">Вставьте текст резюме или ссылки на проекты</label>
-                    <textarea id="resume_text" name="resume_text" required>{{ form_data.resume_text }}</textarea>
+                    <label for="resume_file">Загрузите резюме (PDF или DOCX)</label>
+                    <input type="file" id="resume_file" name="resume_file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+                    <p class="hint">Файл хранится локально и используется только для анализа.</p>
                 </div>
                 <div style="margin-top:16px;">
                     <label for="job_text">Опишите вакансию мечты</label>
                     <textarea id="job_text" name="job_text" required>{{ form_data.job_text }}</textarea>
+                    <p class="hint">Укажите ключевые обязанности и стек — это увидят HR и модель.</p>
                 </div>
                 <button class="btn" type="submit" style="margin-top:18px;">Получить анализ</button>
+                <p class="hint" style="margin-top:10px;">Анализ выполняется реальной моделью gpt-oss:20b-cloud при доступности, иначе используем локальный алгоритм.</p>
             </form>
             {% if analysis %}
             <div class="result-card">
@@ -787,12 +942,14 @@ CANDIDATE_TEMPLATE = """
                 {% if analysis.missing %}
                 <p>Стоит добавить: {{ analysis.missing|join(', ') }}</p>
                 {% endif %}
+                <p class="hint">Источник: {{ 'LLM gpt-oss:20b-cloud' if analysis.engine == 'llm' else 'эвристический поиск по резюме' }}.</p>
             </div>
             {% endif %}
         </section>
 
         <section>
             <h2>История последних анализов</h2>
+            <p class="hint">После первого успешного анализа профиль появится в поиске HR.</p>
             {% if history %}
                 {% for item in history %}
                 <div class="history-item">
@@ -833,6 +990,19 @@ HR_TEMPLATE = """
         .candidate-card:first-child { border-top: none; }
         .score { font-size: 1.4rem; color: #4ade80; }
         .muted { color: #a8aecb; font-size: 0.95rem; }
+        .profile-button {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: #2f3146;
+            color: #c5c8ff;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -841,6 +1011,7 @@ HR_TEMPLATE = """
             <div>HR Agent · {{ user.name }} ({{ user.org_type or 'HR' }})</div>
             <div>
                 <a class="btn" href="/">На лендинг</a>
+                <a class="profile-button" style="margin-left:8px;" href="/profile">{{ user.name[:1]|upper }}</a>
                 <a class="btn" style="margin-left:8px;background:#2f3146;" href="/logout">Выйти</a>
             </div>
         </div>
@@ -886,12 +1057,99 @@ HR_TEMPLATE = """
 """
 
 
+PROFILE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Профиль — HR Agent</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #05060a; color: #f5f6fb; margin: 0; }
+        .page { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+        .card { background: rgba(17,20,37,0.95); border-radius: 24px; padding: 28px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 25px 60px rgba(0,0,0,0.35); }
+        label { display: block; margin-bottom: 6px; color: #a8aecb; font-size: 0.9rem; }
+        input, select {
+            width: 100%; padding: 14px; border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #fff;
+        }
+        form { display: grid; gap: 18px; }
+        .btn {
+            border: none; padding: 12px 22px; border-radius: 999px;
+            background: linear-gradient(120deg, #6f6af8, #8f83ff); color: #fff; cursor: pointer;
+        }
+        .status { color: #4ade80; margin-bottom: 16px; }
+        .error { color: #f87171; margin-bottom: 16px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .profile-button {
+            width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+            display: inline-flex; align-items: center; justify-content: center; color: #c5c8ff; background: #2f3146;
+            text-decoration: none; font-weight: 600;
+        }
+        .links a { color: #a8aecb; text-decoration: none; margin-right: 16px; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="top-nav">
+            <div class="links">
+                <a href="{{ '/candidate/dashboard' if user.role == 'candidate' else '/hr/dashboard' }}">Вернуться в кабинет</a>
+                <a href="/">Лендинг</a>
+            </div>
+            <a class="profile-button" href="/profile">{{ user.name[:1]|upper }}</a>
+        </div>
+        <div class="card">
+            <h1 style="margin-bottom:6px;">Профиль пользователя</h1>
+            <p style="color:#a8aecb;margin-bottom:18px;">Роль: {{ 'Кандидат' if user.role == 'candidate' else 'HR специалист' }}</p>
+            {% if status %}
+            <div class="status">{{ status }}</div>
+            {% endif %}
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+            <form method="post">
+                <div>
+                    <label for="name">Имя</label>
+                    <input type="text" id="name" name="name" value="{{ user.name }}" required />
+                </div>
+                <div>
+                    <label for="email">Рабочая почта</label>
+                    <input type="email" id="email" name="email" value="{{ user.email }}" required />
+                </div>
+                {% if user.role == 'hr' %}
+                <div>
+                    <label for="org_type">Тип организации</label>
+                    <select id="org_type" name="org_type">
+                        <option value="" {% if not user.org_type %}selected{% endif %}>—</option>
+                        <option value="startup" {% if user.org_type == 'startup' %}selected{% endif %}>Стартап</option>
+                        <option value="company" {% if user.org_type == 'company' %}selected{% endif %}>Компания</option>
+                    </select>
+                </div>
+                {% endif %}
+                <div>
+                    <label for="new_password">Новый пароль (по желанию)</label>
+                    <input type="password" id="new_password" name="new_password" minlength="6" />
+                </div>
+                <div>
+                    <label for="confirm_password">Подтверждение пароля</label>
+                    <input type="password" id="confirm_password" name="confirm_password" minlength="6" />
+                </div>
+                <button class="btn" type="submit">Сохранить</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
 env = Environment(loader=BaseLoader(), autoescape=True)
 templates = {
     "landing": env.from_string(LANDING_TEMPLATE),
     "auth": env.from_string(AUTH_TEMPLATE),
     "candidate": env.from_string(CANDIDATE_TEMPLATE),
     "hr": env.from_string(HR_TEMPLATE),
+    "profile": env.from_string(PROFILE_TEMPLATE),
 }
 
 
@@ -1076,6 +1334,55 @@ async def logout(request: Request) -> RedirectResponse:
     return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER)
 
 
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login?next=/profile", status_code=HTTP_303_SEE_OTHER)
+    html = render_template("profile", user=user, error=None, status=None)
+    return HTMLResponse(content=html)
+
+
+@app.post("/profile", response_class=HTMLResponse)
+async def profile_update(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login?next=/profile", status_code=HTTP_303_SEE_OTHER)
+    form = await request.form()
+    name = form.get("name", user["name"]).strip()
+    email = form.get("email", user["email"]).strip()
+    org_type = form.get("org_type", user.get("org_type")) if user["role"] == "hr" else None
+    new_password = form.get("new_password", "").strip()
+    confirm_password = form.get("confirm_password", "").strip()
+    error = None
+    status = None
+    if len(name) < 2:
+        error = "Имя должно содержать минимум 2 символа."
+    elif not email:
+        error = "Почта не может быть пустой."
+    elif new_password and len(new_password) < 6:
+        error = "Пароль должен быть не короче 6 символов."
+    elif new_password and new_password != confirm_password:
+        error = "Пароли не совпадают."
+    if not error:
+        try:
+            updated = update_user_profile(
+                user["id"],
+                name=name,
+                email=email,
+                org_type=org_type if user["role"] == "hr" else None,
+                new_password=new_password or None,
+            )
+            request.session["user_id"] = updated["id"]
+            request.session["role"] = updated["role"]
+            user = updated
+            status = "Профиль обновлён."
+        except ValueError as exc:
+            error = str(exc)
+    html = render_template("profile", user=user, error=error, status=status)
+    return HTMLResponse(content=html, status_code=400 if error else 200)
+
+
 @app.get("/candidate/dashboard", response_class=HTMLResponse)
 async def candidate_dashboard(request: Request) -> HTMLResponse:
     user = get_current_user(request)
@@ -1087,7 +1394,8 @@ async def candidate_dashboard(request: Request) -> HTMLResponse:
         user=user,
         analysis=None,
         history=history,
-        form_data={"resume_text": "", "job_text": ""},
+        form_data={"job_text": ""},
+        form_error=None,
     )
     return HTMLResponse(content=html)
 
@@ -1098,19 +1406,26 @@ async def candidate_analyze(request: Request) -> HTMLResponse:
     if not user or user["role"] != "candidate":
         return RedirectResponse("/login?next=/candidate/dashboard", status_code=HTTP_303_SEE_OTHER)
     form = await request.form()
-    resume_text = form.get("resume_text", "").strip()
     job_text = form.get("job_text", "").strip()
-    if not resume_text or not job_text:
+    resume_file = form.get("resume_file")
+    resume_text = await upload_to_text(resume_file if isinstance(resume_file, StarletteUploadFile) else None)
+    form_error = None
+    if not resume_text:
+        form_error = "Добавьте файл резюме в формате PDF или DOCX."
+    elif not job_text:
+        form_error = "Опишите вакансию, чтобы мы могли выполнить сравнение."
+    if form_error:
         history = get_candidate_history(user["id"])
         html = render_template(
             "candidate",
             user=user,
             analysis=None,
             history=history,
-            form_data={"resume_text": resume_text, "job_text": job_text},
+            form_data={"job_text": job_text},
+            form_error=form_error,
         )
         return HTMLResponse(content=html, status_code=400)
-    analysis = simple_resume_analysis(resume_text, job_text)
+    analysis = analyze_with_llm(resume_text, job_text) or simple_resume_analysis(resume_text, job_text)
     save_candidate_submission(user["id"], resume_text, job_text, analysis["matched"], analysis["missing"], analysis["score"])
     history = get_candidate_history(user["id"])
     html = render_template(
@@ -1118,7 +1433,8 @@ async def candidate_analyze(request: Request) -> HTMLResponse:
         user=user,
         analysis=analysis,
         history=history,
-        form_data={"resume_text": "", "job_text": ""},
+        form_data={"job_text": ""},
+        form_error=None,
     )
     return HTMLResponse(content=html)
 
