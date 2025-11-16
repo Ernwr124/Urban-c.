@@ -1,7 +1,7 @@
 """
-Resume Analyzer - AI-Powered Job Match Analysis
-Compare your resume with job description and get instant feedback
-Beautiful v0.dev-inspired UI
+HR Agent - AI-Powered Job Match Analysis
+Compare your resume with job descriptions using Ollama (gpt-oss:20b-cloud)
+Minimalist Black & White Design
 """
 
 # ============================================================================
@@ -48,12 +48,11 @@ except ImportError:
 
 class Config:
     """Application configuration"""
-    DATABASE_URL = "sqlite:///./hr_platform.db"
+    DATABASE_URL = "sqlite:///./hr_agent.db"
     SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
     SESSION_LIFETIME_HOURS = 24
-    OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "https://api.ollama.cloud/v1/chat/completions")
+    OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
     OLLAMA_MODEL = "gpt-oss:20b-cloud"
-    OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     UPLOAD_DIR = Path("./uploads")
     
@@ -189,7 +188,7 @@ def parse_resume(filename: str, file_content: bytes) -> str:
 
 
 async def compare_resume_with_job(resume_text: str, job_description: str) -> Dict[str, Any]:
-    """Compare resume with job description using Ollama Cloud"""
+    """Compare resume with job description using Ollama"""
     
     prompt = f"""Compare this resume with the job description and provide detailed analysis in JSON format.
 
@@ -199,60 +198,59 @@ RESUME:
 JOB DESCRIPTION:
 {job_description}
 
-Return ONLY valid JSON with this exact structure:
+Analyze and return ONLY valid JSON with this exact structure:
 {{
-    "match_score": 0.0-100.0,
-    "pros": ["list of 5-7 strong matches between resume and job"],
+    "match_score": 0-100,
+    "pros": ["list of 5-7 strengths that match job requirements"],
     "cons": ["list of 5-7 gaps or missing requirements"],
     "skills_match": {{
-        "matched_skills": ["skills from resume that match job requirements"],
-        "missing_skills": ["required skills not found in resume"],
-        "additional_skills": ["extra skills in resume not in job description"]
+        "matched_skills": ["skills that match"],
+        "missing_skills": ["required skills not in resume"],
+        "additional_skills": ["extra skills candidate has"]
     }},
     "experience_match": {{
         "score": 0-100,
-        "analysis": "detailed comparison of experience vs requirements"
+        "analysis": "detailed comparison text"
     }},
     "education_match": {{
         "score": 0-100,
-        "analysis": "detailed comparison of education vs requirements"
+        "analysis": "detailed comparison text"
     }},
-    "recommendations": ["list of 5-7 specific actions to improve match"],
-    "summary": "2-3 sentence overall assessment of fit for this role"
-}}"""
+    "recommendations": ["5-7 specific actions to improve match"],
+    "summary": "2-3 sentence overall assessment"
+}}
+
+Return only the JSON, no other text."""
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 Config.OLLAMA_API_URL,
-                headers={
-                    "Authorization": f"Bearer {Config.OLLAMA_API_KEY}",
-                    "Content-Type": "application/json"
-                },
                 json={
                     "model": Config.OLLAMA_MODEL,
-                    "messages": [
-                        {"role": "system", "content": "You are an expert HR analyst specializing in job matching. Always respond with valid JSON only."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.7
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
                 }
             )
             
             if response.status_code == 200:
                 result = response.json()
-                content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+                response_text = result.get("response", "{}")
                 
                 try:
-                    analysis_data = json.loads(content)
+                    # Try to parse as JSON
+                    analysis_data = json.loads(response_text)
                     return analysis_data
                 except json.JSONDecodeError:
+                    print(f"JSON decode error. Response: {response_text[:200]}")
                     return create_fallback_comparison(resume_text, job_description)
             else:
+                print(f"Ollama API error: {response.status_code}")
                 return create_fallback_comparison(resume_text, job_description)
                 
     except Exception as e:
-        print(f"Ollama API error: {str(e)}")
+        print(f"Ollama connection error: {str(e)}")
         return create_fallback_comparison(resume_text, job_description)
 
 
@@ -268,39 +266,39 @@ def create_fallback_comparison(resume_text: str, job_description: str) -> Dict[s
         "match_score": match_score,
         "pros": [
             "Resume format is professional and well-structured",
-            "Contains relevant experience in the field",
-            "Shows career progression and growth",
+            "Contains relevant industry experience",
             "Demonstrates technical capabilities",
-            "Good educational background"
+            "Shows career progression",
+            "Good educational foundation"
         ],
         "cons": [
-            "Some specific job requirements need verification",
-            "Could add more quantifiable achievements",
-            "May need additional certifications for this role",
-            "Experience level requires manual review",
-            "Some technical skills need confirmation"
+            "Some job requirements need verification",
+            "Could emphasize more quantifiable achievements",
+            "Additional certifications may be beneficial",
+            "Some technical skills require confirmation",
+            "Experience depth needs manual review"
         ],
         "skills_match": {
-            "matched_skills": ["Communication", "Teamwork", "Problem Solving"],
-            "missing_skills": ["Specific technical skills pending AI analysis"],
-            "additional_skills": ["General professional skills"]
+            "matched_skills": ["Communication", "Problem Solving", "Teamwork"],
+            "missing_skills": ["Waiting for Ollama analysis"],
+            "additional_skills": ["Professional experience"]
         },
         "experience_match": {
             "score": 70,
-            "analysis": f"Resume shows {len(resume_text.split())} words of experience. Detailed comparison pending full AI analysis."
+            "analysis": "Resume shows relevant experience. Full analysis requires Ollama connection."
         },
         "education_match": {
             "score": 75,
-            "analysis": "Education section present. Detailed analysis pending full AI configuration."
+            "analysis": "Education background present. Detailed comparison requires Ollama."
         },
         "recommendations": [
-            "Highlight specific achievements from job requirements",
-            "Add metrics and quantifiable results",
-            "Include relevant certifications if available",
-            "Tailor resume to match job keywords",
-            "Emphasize experience in required technologies"
+            "Ensure Ollama is running: ollama serve",
+            "Pull model: ollama pull gpt-oss:20b-cloud",
+            "Highlight achievements with metrics",
+            "Align resume keywords with job description",
+            "Add relevant certifications"
         ],
-        "summary": f"Resume shows {match_score:.0f}% match with job description based on keyword analysis. Full AI-powered analysis will be available once the service is configured with Ollama API key."
+        "summary": f"Basic analysis shows {match_score:.0f}% keyword match. Connect Ollama for full AI-powered analysis using gpt-oss:20b-cloud model."
     }
 
 
@@ -336,10 +334,10 @@ def require_auth(user: Optional[User] = Depends(get_current_user)) -> User:
 
 
 # ============================================================================
-# V0.DEV STYLE UI
+# MINIMALIST BLACK & WHITE UI
 # ============================================================================
 
-V0_CSS = """
+MINIMALIST_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 * {
@@ -349,142 +347,139 @@ V0_CSS = """
 }
 
 :root {
-    --color-bg: #ffffff;
-    --color-fg: #0a0a0a;
-    --color-border: #e5e7eb;
-    --color-muted: #6b7280;
-    --color-accent: #3b82f6;
-    --color-accent-light: #dbeafe;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --black: #000000;
+    --white: #ffffff;
+    --gray-light: #f5f5f5;
+    --gray-border: #e0e0e0;
+    --gray-text: #666666;
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
 }
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--color-bg);
-    color: var(--color-fg);
+    background: var(--black);
+    color: var(--white);
     line-height: 1.6;
     font-size: 15px;
     -webkit-font-smoothing: antialiased;
 }
 
 .nav {
-    border-bottom: 1px solid var(--color-border);
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px);
+    background: var(--black);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     position: sticky;
     top: 0;
     z-index: 50;
+    backdrop-filter: blur(10px);
 }
 
 .nav-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 32px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 64px;
+    height: 72px;
 }
 
 .nav-logo {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--color-fg);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--white);
     text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    letter-spacing: -0.5px;
 }
 
 .nav-links {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 32px;
 }
 
 .nav-link {
-    color: var(--color-muted);
+    color: rgba(255, 255, 255, 0.7);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     transition: color 0.2s;
 }
 
 .nav-link:hover {
-    color: var(--color-fg);
+    color: var(--white);
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 48px 24px;
+    padding: 64px 32px;
 }
 
 .container-sm {
     max-width: 600px;
     margin: 0 auto;
-    padding: 48px 24px;
-}
-
-.card {
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 32px;
-    box-shadow: var(--shadow);
-    margin-bottom: 24px;
+    padding: 64px 32px;
 }
 
 .hero {
     text-align: center;
-    padding: 80px 24px 60px;
-    background: linear-gradient(to bottom, #f9fafb 0%, #ffffff 100%);
+    padding: 120px 32px 80px;
 }
 
 .hero h1 {
-    font-size: 56px;
+    font-size: 64px;
     font-weight: 700;
-    margin-bottom: 16px;
-    background: linear-gradient(to right, #0a0a0a, #3b82f6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    margin-bottom: 24px;
+    letter-spacing: -2px;
+    line-height: 1.1;
 }
 
 .hero p {
     font-size: 20px;
-    color: var(--color-muted);
+    color: rgba(255, 255, 255, 0.7);
     max-width: 600px;
-    margin: 0 auto 40px;
+    margin: 0 auto 48px;
+    line-height: 1.6;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 40px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 24px;
+}
+
+.card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transition: border-color 0.3s;
 }
 
 h1 {
-    font-size: 36px;
+    font-size: 40px;
     font-weight: 700;
-    margin-bottom: 8px;
-    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    letter-spacing: -1px;
 }
 
 h2 {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 600;
     margin-bottom: 16px;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.5px;
 }
 
 h3 {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 
 .text-muted {
-    color: var(--color-muted);
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .text-sm {
@@ -499,41 +494,36 @@ h3 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 500;
-    border-radius: 8px;
-    border: 1px solid transparent;
+    padding: 14px 32px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 12px;
+    border: 2px solid var(--white);
+    background: var(--white);
+    color: var(--black);
     cursor: pointer;
     transition: all 0.2s;
     text-decoration: none;
     gap: 8px;
 }
 
-.btn-primary {
-    background: var(--color-fg);
-    color: var(--color-bg);
-    border-color: var(--color-fg);
-}
-
-.btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-lg);
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2);
 }
 
 .btn-outline {
     background: transparent;
-    color: var(--color-fg);
-    border-color: var(--color-border);
+    color: var(--white);
 }
 
 .btn-outline:hover {
-    background: var(--color-bg);
-    border-color: var(--color-fg);
+    background: var(--white);
+    color: var(--black);
 }
 
 .btn-large {
-    padding: 12px 28px;
+    padding: 18px 40px;
     font-size: 16px;
 }
 
@@ -543,150 +533,144 @@ h3 {
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .form-label {
     display: block;
-    font-weight: 500;
-    margin-bottom: 8px;
+    font-weight: 600;
+    margin-bottom: 12px;
     font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .form-control {
     width: 100%;
-    padding: 12px 16px;
+    padding: 16px 20px;
     font-size: 15px;
-    color: var(--color-fg);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
+    color: var(--white);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     outline: none;
     transition: all 0.2s;
     font-family: inherit;
 }
 
 .form-control:focus {
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-light);
+    border-color: var(--white);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 textarea.form-control {
-    min-height: 200px;
+    min-height: 240px;
     resize: vertical;
     line-height: 1.6;
 }
 
 .alert {
-    padding: 16px 20px;
-    border-radius: 8px;
+    padding: 20px 24px;
+    border-radius: 12px;
     margin-bottom: 24px;
     border: 1px solid;
 }
 
 .alert-success {
-    background: #d1fae5;
-    border-color: var(--color-success);
-    color: #065f46;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--success);
+    color: var(--success);
 }
 
 .alert-error {
-    background: #fee2e2;
-    border-color: var(--color-danger);
-    color: #991b1b;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
 }
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-bottom: 32px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+    margin-bottom: 48px;
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    padding: 24px;
-    color: white;
-    box-shadow: var(--shadow);
-}
-
-.stat-card.blue {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-}
-
-.stat-card.green {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-}
-
-.stat-card.orange {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: var(--white);
+    color: var(--black);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
 }
 
 .stat-value {
-    font-size: 36px;
+    font-size: 48px;
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
 }
 
 .stat-label {
     font-size: 13px;
-    opacity: 0.9;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    opacity: 0.7;
 }
 
 .score-display {
     text-align: center;
-    padding: 40px;
+    padding: 48px;
 }
 
 .score-circle {
-    width: 160px;
-    height: 160px;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 24px;
+    margin: 0 auto 32px;
     border: 8px solid;
     position: relative;
 }
 
 .score-circle.excellent {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-    border-color: var(--color-success);
-    color: #065f46;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--success);
+    color: var(--success);
 }
 
 .score-circle.good {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border-color: var(--color-warning);
-    color: #92400e;
+    background: rgba(234, 179, 8, 0.1);
+    border-color: var(--warning);
+    color: var(--warning);
 }
 
 .score-circle.poor {
-    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-    border-color: var(--color-danger);
-    color: #991b1b;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
 }
 
 .score-value {
-    font-size: 48px;
+    font-size: 56px;
     font-weight: 700;
+    letter-spacing: -2px;
 }
 
 .score-label {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    opacity: 0.8;
 }
 
 .grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: 24px;
 }
 
@@ -697,9 +681,9 @@ textarea.form-control {
 .feature-item {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--color-border);
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .feature-item:last-child {
@@ -708,48 +692,57 @@ textarea.form-control {
 
 .feature-icon {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 16px;
+    font-weight: 700;
 }
 
 .feature-icon.pro {
-    background: #d1fae5;
-    color: var(--color-success);
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
 }
 
 .feature-icon.con {
-    background: #fee2e2;
-    color: var(--color-danger);
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+}
+
+.feature-icon.tip {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--white);
 }
 
 .badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
     margin: 4px;
 }
 
 .badge-success {
-    background: #d1fae5;
-    color: #065f46;
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
 }
 
 .badge-warning {
-    background: #fef3c7;
-    color: #92400e;
+    background: rgba(234, 179, 8, 0.2);
+    color: var(--warning);
+    border: 1px solid var(--warning);
 }
 
 .badge-info {
-    background: #dbeafe;
-    color: #1e40af;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--white);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .table {
@@ -759,16 +752,18 @@ textarea.form-control {
 
 .table th {
     text-align: left;
-    padding: 12px;
+    padding: 16px 12px;
     font-weight: 600;
-    font-size: 13px;
-    color: var(--color-muted);
-    border-bottom: 1px solid var(--color-border);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .table td {
-    padding: 16px 12px;
-    border-bottom: 1px solid var(--color-border);
+    padding: 20px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .table tr:last-child td {
@@ -776,18 +771,18 @@ textarea.form-control {
 }
 
 .file-upload {
-    border: 2px dashed var(--color-border);
-    border-radius: 12px;
-    padding: 48px 24px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 64px 32px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.2s;
-    background: #f9fafb;
+    transition: all 0.3s;
+    background: rgba(255, 255, 255, 0.02);
 }
 
 .file-upload:hover {
-    border-color: var(--color-accent);
-    background: var(--color-accent-light);
+    border-color: var(--white);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .file-upload input {
@@ -795,34 +790,35 @@ textarea.form-control {
 }
 
 .file-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 56px;
+    margin-bottom: 24px;
+    opacity: 0.6;
 }
 
 .progress-bar {
     width: 100%;
-    height: 8px;
-    background: var(--color-border);
-    border-radius: 4px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
     overflow: hidden;
-    margin: 8px 0;
+    margin: 16px 0;
 }
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--color-success), var(--color-accent));
-    border-radius: 4px;
-    transition: width 0.3s;
+    background: var(--white);
+    border-radius: 6px;
+    transition: width 0.5s;
 }
 
 .section {
-    margin-bottom: 32px;
+    margin-bottom: 40px;
 }
 
 .divider {
     height: 1px;
-    background: var(--color-border);
-    margin: 32px 0;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 40px 0;
 }
 
 .flex-between {
@@ -831,17 +827,9 @@ textarea.form-control {
     align-items: center;
 }
 
-.gap-2 {
-    gap: 8px;
-}
-
-.gap-4 {
-    gap: 16px;
-}
-
 @media (max-width: 768px) {
     .hero h1 {
-        font-size: 36px;
+        font-size: 40px;
     }
     
     .hero p {
@@ -853,7 +841,7 @@ textarea.form-control {
     }
     
     .container {
-        padding: 32px 16px;
+        padding: 40px 16px;
     }
     
     .card {
@@ -863,24 +851,28 @@ textarea.form-control {
     .grid-2 {
         grid-template-columns: 1fr;
     }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
 }
 """
 
 
 def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
-    """Generate base HTML with v0.dev-style navigation"""
+    """Generate base HTML"""
     
     if user:
         nav_links = f"""
             <a href="/dashboard" class="nav-link">Dashboard</a>
-            <a href="/analyze" class="nav-link">New Analysis</a>
+            <a href="/analyze" class="nav-link">Analyze</a>
             <a href="/profile" class="nav-link">{user.full_name}</a>
             <a href="/logout" class="nav-link">Sign out</a>
         """
     else:
         nav_links = """
             <a href="/login" class="nav-link">Sign in</a>
-            <a href="/register" class="btn btn-primary">Get Started</a>
+            <a href="/register" class="btn">Get Started</a>
         """
     
     return f"""<!DOCTYPE html>
@@ -888,15 +880,13 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - Resume Analyzer</title>
-    <style>{V0_CSS}</style>
+    <title>{title} - HR Agent</title>
+    <style>{MINIMALIST_CSS}</style>
 </head>
 <body>
     <nav class="nav">
         <div class="nav-container">
-            <a href="/" class="nav-logo">
-                ✨ Resume Analyzer
-            </a>
+            <a href="/" class="nav-logo">HR Agent</a>
             <div class="nav-links">
                 {nav_links}
             </div>
@@ -917,10 +907,10 @@ def landing_page() -> str:
     """Landing page"""
     content = """
     <div class="hero">
-        <h1>Match Your Resume with Your Dream Job</h1>
-        <p>Upload your resume and paste the job description. Get instant AI-powered analysis showing how well you match the position.</p>
+        <h1>Match Your Resume<br>with Your Dream Job</h1>
+        <p>AI-powered analysis that compares your resume with job descriptions. Get instant feedback on how well you match the position.</p>
         <div style="display: flex; gap: 16px; justify-content: center;">
-            <a href="/register" class="btn btn-primary btn-large">Start Analyzing →</a>
+            <a href="/register" class="btn btn-large">Get Started</a>
             <a href="/login" class="btn btn-outline btn-large">Sign In</a>
         </div>
     </div>
@@ -928,23 +918,23 @@ def landing_page() -> str:
     <div class="container">
         <div class="grid-2">
             <div class="card">
-                <h3>📊 Match Percentage</h3>
-                <p class="text-muted">See exactly how well your resume aligns with the job requirements. Get a clear percentage score.</p>
+                <h3>Match Percentage</h3>
+                <p class="text-muted">See exactly how well your resume aligns with job requirements. Clear percentage score with detailed breakdown.</p>
             </div>
             
             <div class="card">
-                <h3>✅ Pros & Cons</h3>
-                <p class="text-muted">Discover your strengths for the position and areas where you might need improvement.</p>
+                <h3>Pros & Cons</h3>
+                <p class="text-muted">Discover your strengths for the position and areas where you need improvement. Honest, actionable feedback.</p>
             </div>
             
             <div class="card">
-                <h3>🎯 Skills Analysis</h3>
-                <p class="text-muted">Identify matched skills, missing requirements, and additional qualifications you bring.</p>
+                <h3>Skills Analysis</h3>
+                <p class="text-muted">Identify matched skills, missing requirements, and additional qualifications you bring to the table.</p>
             </div>
             
             <div class="card">
-                <h3>💡 Recommendations</h3>
-                <p class="text-muted">Get actionable advice on how to improve your match score and stand out.</p>
+                <h3>Smart Recommendations</h3>
+                <p class="text-muted">Get specific advice on improving your match score. Powered by Ollama AI (gpt-oss:20b-cloud).</p>
             </div>
         </div>
     </div>
@@ -960,7 +950,7 @@ def login_page(error: str = "") -> str:
     <div class="container-sm">
         <div class="card">
             <h2>Welcome back</h2>
-            <p class="text-muted" style="margin-bottom: 32px;">Sign in to your account to continue</p>
+            <p class="text-muted" style="margin-bottom: 32px;">Sign in to your HR Agent account</p>
             
             {error_html}
             
@@ -975,13 +965,13 @@ def login_page(error: str = "") -> str:
                     <input type="password" name="password" class="form-control" required placeholder="••••••••">
                 </div>
                 
-                <button type="submit" class="btn btn-primary btn-block btn-large">Sign In</button>
+                <button type="submit" class="btn btn-block btn-large">Sign In</button>
             </form>
             
             <div class="divider"></div>
             
             <p class="text-muted text-sm" style="text-align: center;">
-                Don't have an account? <a href="/register" style="color: var(--color-accent); text-decoration: none;">Create one</a>
+                Don't have an account? <a href="/register" style="color: var(--white); text-decoration: underline;">Create one</a>
             </p>
         </div>
     </div>
@@ -996,8 +986,8 @@ def register_page(error: str = "") -> str:
     content = f"""
     <div class="container-sm">
         <div class="card">
-            <h2>Create your account</h2>
-            <p class="text-muted" style="margin-bottom: 32px;">Get started with your resume analysis</p>
+            <h2>Create account</h2>
+            <p class="text-muted" style="margin-bottom: 32px;">Get started with HR Agent</p>
             
             {error_html}
             
@@ -1014,16 +1004,16 @@ def register_page(error: str = "") -> str:
                 
                 <div class="form-group">
                     <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required minlength="6" placeholder="At least 6 characters">
+                    <input type="password" name="password" class="form-control" required minlength="6" placeholder="Minimum 6 characters">
                 </div>
                 
-                <button type="submit" class="btn btn-primary btn-block btn-large">Create Account</button>
+                <button type="submit" class="btn btn-block btn-large">Create Account</button>
             </form>
             
             <div class="divider"></div>
             
             <p class="text-muted text-sm" style="text-align: center;">
-                Already have an account? <a href="/login" style="color: var(--color-accent); text-decoration: none;">Sign in</a>
+                Already have an account? <a href="/login" style="color: var(--white); text-decoration: underline;">Sign in</a>
             </p>
         </div>
     </div>
@@ -1054,7 +1044,7 @@ def dashboard_page(user: User, db: Session) -> str:
         elif analysis.match_score >= 50:
             badge_class = "badge-warning"
         else:
-            badge_class = "badge badge-warning"
+            badge_class = "badge-warning"
         
         recent_list += f"""
         <tr>
@@ -1063,45 +1053,45 @@ def dashboard_page(user: User, db: Session) -> str:
                 <div class="text-muted text-xs">{analysis.created_at.strftime('%b %d, %Y at %H:%M')}</div>
             </td>
             <td><span class="{badge_class}">{analysis.match_score:.0f}%</span></td>
-            <td><a href="/result/{analysis.id}" class="btn btn-outline" style="padding: 6px 16px;">View Details →</a></td>
+            <td><a href="/result/{analysis.id}" class="btn btn-outline" style="padding: 8px 20px;">View</a></td>
         </tr>
         """
     
     if not recent_list:
-        recent_list = '<tr><td colspan="3" style="text-align: center;" class="text-muted">No analyses yet. <a href="/analyze" style="color: var(--color-accent);">Create your first one</a></td></tr>'
+        recent_list = '<tr><td colspan="3" style="text-align: center;" class="text-muted">No analyses yet. <a href="/analyze" style="color: var(--white); text-decoration: underline;">Create your first one</a></td></tr>'
     
     content = f"""
     <div class="container">
-        <div class="flex-between" style="margin-bottom: 32px;">
+        <div class="flex-between" style="margin-bottom: 48px;">
             <div>
                 <h1>Dashboard</h1>
                 <p class="text-muted">Welcome back, {user.full_name}</p>
             </div>
-            <a href="/analyze" class="btn btn-primary btn-large">New Analysis</a>
+            <a href="/analyze" class="btn btn-large">New Analysis</a>
         </div>
         
         <div class="stats-grid">
-            <div class="stat-card blue">
+            <div class="stat-card">
                 <div class="stat-value">{total_analyses}</div>
-                <div class="stat-label">Total Analyses</div>
+                <div class="stat-label">Analyses</div>
             </div>
-            <div class="stat-card green">
+            <div class="stat-card">
                 <div class="stat-value">{avg_score_value:.0f}%</div>
-                <div class="stat-label">Average Match</div>
+                <div class="stat-label">Avg Match</div>
             </div>
-            <div class="stat-card orange">
+            <div class="stat-card">
                 <div class="stat-value">{latest_score:.0f}%</div>
-                <div class="stat-label">Latest Score</div>
+                <div class="stat-label">Latest</div>
             </div>
         </div>
         
         <div class="card">
-            <h3 style="margin-bottom: 20px;">Recent Analyses</h3>
+            <h3 style="margin-bottom: 24px;">Recent Analyses</h3>
             <table class="table">
                 <thead>
                     <tr>
                         <th>Resume & Date</th>
-                        <th>Match Score</th>
+                        <th>Score</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -1123,28 +1113,25 @@ def profile_page(user: User, db: Session) -> str:
     content = f"""
     <div class="container-sm">
         <h1>Profile</h1>
-        <p class="text-muted" style="margin-bottom: 32px;">Manage your account information</p>
+        <p class="text-muted" style="margin-bottom: 32px;">Your account information</p>
         
         <div class="card">
             <div class="section">
-                <h3>Account Details</h3>
-                <div style="margin-top: 20px;">
-                    <div style="margin-bottom: 16px;">
-                        <div class="text-muted text-sm">FULL NAME</div>
-                        <div style="font-weight: 500; margin-top: 4px;">{user.full_name}</div>
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <div class="text-muted text-sm">EMAIL</div>
-                        <div style="font-weight: 500; margin-top: 4px;">{user.email}</div>
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <div class="text-muted text-sm">MEMBER SINCE</div>
-                        <div style="font-weight: 500; margin-top: 4px;">{user.created_at.strftime('%B %d, %Y')}</div>
-                    </div>
-                    <div>
-                        <div class="text-muted text-sm">TOTAL ANALYSES</div>
-                        <div style="font-weight: 500; margin-top: 4px;">{total_analyses}</div>
-                    </div>
+                <div style="margin-bottom: 24px;">
+                    <div class="text-muted text-sm">FULL NAME</div>
+                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.full_name}</div>
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <div class="text-muted text-sm">EMAIL</div>
+                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.email}</div>
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <div class="text-muted text-sm">MEMBER SINCE</div>
+                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.created_at.strftime('%B %d, %Y')}</div>
+                </div>
+                <div>
+                    <div class="text-muted text-sm">TOTAL ANALYSES</div>
+                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{total_analyses}</div>
                 </div>
             </div>
         </div>
@@ -1154,52 +1141,55 @@ def profile_page(user: User, db: Session) -> str:
 
 
 def analyze_page(user: User, error: str = "") -> str:
-    """Analyze page with job description"""
+    """Analyze page"""
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     content = f"""
     <div class="container-sm">
-        <h1>Analyze Resume Match</h1>
-        <p class="text-muted" style="margin-bottom: 32px;">Upload your resume and paste the job description to see how well you match</p>
+        <h1>Analyze Match</h1>
+        <p class="text-muted" style="margin-bottom: 48px;">Upload your resume and paste the job description</p>
         
         {error_html}
         
         <form method="POST" action="/analyze" enctype="multipart/form-data">
             <div class="card">
-                <h3>1. Upload Your Resume</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 20px;">PDF or DOCX format</p>
+                <h3>1. Upload Resume</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">PDF or DOCX format, max 10MB</p>
                 
                 <div class="file-upload" onclick="document.getElementById('file-input').click();">
                     <div class="file-icon">📄</div>
                     <input type="file" id="file-input" name="file" accept=".pdf,.docx,.doc" required onchange="updateFileName(this)">
-                    <p id="file-name" style="font-weight: 500; margin-bottom: 8px;">Click to upload resume</p>
-                    <p class="text-muted text-xs">Max file size: 10MB</p>
+                    <p id="file-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Click to upload resume</p>
+                    <p class="text-muted text-xs">Supported: PDF, DOCX</p>
                 </div>
             </div>
             
             <div class="card">
-                <h3>2. Paste Job Description</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 20px;">Copy the full job posting including requirements, responsibilities, and qualifications</p>
+                <h3>2. Job Description</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">Paste the complete job posting including all requirements</p>
                 
                 <div class="form-group">
-                    <textarea name="job_description" class="form-control" required placeholder="Paste the complete job description here...
+                    <textarea name="job_description" class="form-control" required placeholder="Paste the full job description here...
 
 Example:
 Job Title: Senior Software Engineer
 Location: Remote
 Salary: $120k-$150k
 
-About the role:
+About the Role:
 We're looking for an experienced Software Engineer...
 
 Requirements:
-- 5+ years of experience with Python
-- Strong background in web development
-- Experience with databases..."></textarea>
+• 5+ years of experience with Python
+• Strong background in web development
+• Experience with databases and APIs...
+
+Responsibilities:
+• Design and implement features..."></textarea>
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary btn-block btn-large">Analyze Match →</button>
+            <button type="submit" class="btn btn-block btn-large">Analyze Match</button>
         </form>
     </div>
     
@@ -1214,7 +1204,7 @@ Requirements:
 
 
 def result_page(user: User, analysis: Analysis) -> str:
-    """Result page showing match analysis"""
+    """Result page"""
     
     data = json.loads(analysis.analysis_data)
     score = analysis.match_score
@@ -1227,7 +1217,7 @@ def result_page(user: User, analysis: Analysis) -> str:
         score_text = "Good Match"
     else:
         score_class = "poor"
-        score_text = "Needs Improvement"
+        score_text = "Needs Work"
     
     pros_html = "".join([f'<li class="feature-item"><span class="feature-icon pro">✓</span><span>{p}</span></li>' for p in data.get('pros', [])])
     cons_html = "".join([f'<li class="feature-item"><span class="feature-icon con">✗</span><span>{c}</span></li>' for c in data.get('cons', [])])
@@ -1240,15 +1230,15 @@ def result_page(user: User, analysis: Analysis) -> str:
     missing_html = "".join([f'<span class="badge badge-warning">{s}</span>' for s in missing_skills])
     additional_html = "".join([f'<span class="badge badge-info">{s}</span>' for s in additional_skills])
     
-    recommendations_html = "".join([f'<li class="feature-item"><span class="feature-icon pro">💡</span><span>{r}</span></li>' for r in data.get('recommendations', [])])
+    recommendations_html = "".join([f'<li class="feature-item"><span class="feature-icon tip">💡</span><span>{r}</span></li>' for r in data.get('recommendations', [])])
     
     exp_score = data.get('experience_match', {}).get('score', 0)
     edu_score = data.get('education_match', {}).get('score', 0)
     
     content = f"""
     <div class="container">
-        <div style="margin-bottom: 24px;">
-            <a href="/dashboard" class="btn btn-outline">← Back to Dashboard</a>
+        <div style="margin-bottom: 32px;">
+            <a href="/dashboard" class="btn btn-outline">← Dashboard</a>
         </div>
         
         <div class="card">
@@ -1259,7 +1249,7 @@ def result_page(user: User, analysis: Analysis) -> str:
                 </div>
                 <h2>{score_text}</h2>
                 <p class="text-muted">{data.get('summary', '')}</p>
-                <div class="text-muted text-sm" style="margin-top: 16px;">
+                <div class="text-muted text-sm" style="margin-top: 20px;">
                     📄 {analysis.filename} • {analysis.created_at.strftime('%B %d, %Y')}
                 </div>
             </div>
@@ -1267,16 +1257,16 @@ def result_page(user: User, analysis: Analysis) -> str:
         
         <div class="grid-2">
             <div class="card">
-                <h3 style="color: var(--color-success);">✅ Your Strengths</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 20px;">What makes you a great fit for this role</p>
+                <h3>Strengths</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">What makes you a great fit</p>
                 <ul class="feature-list">
                     {pros_html}
                 </ul>
             </div>
             
             <div class="card">
-                <h3 style="color: var(--color-danger);">⚠️ Areas to Address</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 20px;">Requirements you may need to strengthen</p>
+                <h3>Areas to Address</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">Requirements to strengthen</p>
                 <ul class="feature-list">
                     {cons_html}
                 </ul>
@@ -1284,71 +1274,71 @@ def result_page(user: User, analysis: Analysis) -> str:
         </div>
         
         <div class="card">
-            <h3>🎯 Skills Analysis</h3>
+            <h3>Skills Analysis</h3>
             
             <div class="section">
                 <h4 class="text-sm text-muted">MATCHED SKILLS</h4>
-                <div style="margin-top: 8px;">
-                    {matched_html if matched_html else '<span class="text-muted">No matched skills detected</span>'}
+                <div style="margin-top: 12px;">
+                    {matched_html if matched_html else '<span class="text-muted">No matched skills</span>'}
                 </div>
             </div>
             
             <div class="section">
                 <h4 class="text-sm text-muted">MISSING SKILLS</h4>
-                <div style="margin-top: 8px;">
-                    {missing_html if missing_html else '<span class="text-muted">No missing skills detected</span>'}
+                <div style="margin-top: 12px;">
+                    {missing_html if missing_html else '<span class="text-muted">No missing skills</span>'}
                 </div>
             </div>
             
             <div class="section">
-                <h4 class="text-sm text-muted">ADDITIONAL SKILLS YOU BRING</h4>
-                <div style="margin-top: 8px;">
-                    {additional_html if additional_html else '<span class="text-muted">No additional skills detected</span>'}
+                <h4 class="text-sm text-muted">ADDITIONAL SKILLS</h4>
+                <div style="margin-top: 12px;">
+                    {additional_html if additional_html else '<span class="text-muted">No additional skills</span>'}
                 </div>
             </div>
         </div>
         
         <div class="grid-2">
             <div class="card">
-                <h3>💼 Experience Match</h3>
+                <h3>Experience Match</h3>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: {exp_score}%"></div>
                 </div>
-                <p style="margin-top: 12px; font-weight: 600;">{exp_score}% Match</p>
-                <p class="text-muted text-sm">{data.get('experience_match', {}).get('analysis', '')}</p>
+                <p style="margin-top: 16px; font-weight: 600; font-size: 18px;">{exp_score}%</p>
+                <p class="text-muted text-sm" style="margin-top: 8px;">{data.get('experience_match', {}).get('analysis', '')}</p>
             </div>
             
             <div class="card">
-                <h3>🎓 Education Match</h3>
+                <h3>Education Match</h3>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: {edu_score}%"></div>
                 </div>
-                <p style="margin-top: 12px; font-weight: 600;">{edu_score}% Match</p>
-                <p class="text-muted text-sm">{data.get('education_match', {}).get('analysis', '')}</p>
+                <p style="margin-top: 16px; font-weight: 600; font-size: 18px;">{edu_score}%</p>
+                <p class="text-muted text-sm" style="margin-top: 8px;">{data.get('education_match', {}).get('analysis', '')}</p>
             </div>
         </div>
         
         <div class="card">
-            <h3>💡 Recommendations</h3>
-            <p class="text-muted text-sm" style="margin-bottom: 20px;">Actions to improve your match for this position</p>
+            <h3>Recommendations</h3>
+            <p class="text-muted text-sm" style="margin-bottom: 24px;">Actions to improve your match</p>
             <ul class="feature-list">
                 {recommendations_html}
             </ul>
         </div>
         
-        <div style="text-align: center; margin-top: 32px;">
-            <a href="/analyze" class="btn btn-primary btn-large">Analyze Another Position</a>
+        <div style="text-align: center; margin-top: 48px;">
+            <a href="/analyze" class="btn btn-large">Analyze Another Position</a>
         </div>
     </div>
     """
-    return get_base_html("Analysis Results", content, user)
+    return get_base_html("Results", content, user)
 
 
 # ============================================================================
 # FASTAPI APP & ROUTES
 # ============================================================================
 
-app = FastAPI(title="Resume Analyzer", version="3.0.0")
+app = FastAPI(title="HR Agent", version="1.0.0")
 
 
 @app.on_event("startup")
@@ -1356,7 +1346,11 @@ async def startup_event():
     """Initialize application"""
     Config.init()
     init_db()
-    print("Resume Analyzer initialized successfully")
+    print("=" * 50)
+    print("HR Agent initialized successfully")
+    print(f"Using Ollama model: {Config.OLLAMA_MODEL}")
+    print(f"Ollama URL: {Config.OLLAMA_API_URL}")
+    print("=" * 50)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1384,7 +1378,6 @@ async def login_post(
     if not user or not verify_password(password, user.password_hash):
         return HTMLResponse(login_page(error="Invalid email or password"))
     
-    # Create session
     session_token = create_session_token()
     expires_at = datetime.utcnow() + timedelta(hours=Config.SESSION_LIFETIME_HOURS)
     
@@ -1488,23 +1481,17 @@ async def analyze_post(
 ):
     """Handle analysis request"""
     
-    # Validate file size
     file_content = await file.read()
     if len(file_content) > Config.MAX_FILE_SIZE:
         return HTMLResponse(analyze_page(user, error="File too large (max 10MB)"))
     
-    # Save file
     file_path = Config.UPLOAD_DIR / f"{user.id}_{datetime.utcnow().timestamp()}_{file.filename}"
     with open(file_path, "wb") as f:
         f.write(file_content)
     
-    # Parse resume
     resume_text = parse_resume(file.filename, file_content)
-    
-    # Compare with job description
     analysis_data = await compare_resume_with_job(resume_text, job_description)
     
-    # Save analysis
     analysis = Analysis(
         user_id=user.id,
         filename=file.filename,
@@ -1541,7 +1528,11 @@ async def result_detail(
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "status": "healthy",
+        "model": Config.OLLAMA_MODEL,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # ============================================================================

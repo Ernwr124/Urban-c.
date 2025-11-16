@@ -1,8 +1,21 @@
-# Quick Start Guide - Resume Analyzer
+# Quick Start - HR Agent
 
-## 🚀 Get Started in 3 Steps
+## 🚀 Setup in 3 Steps
 
-### 1. Install & Run
+### 1. Install Ollama & Model
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull the model
+ollama pull gpt-oss:20b-cloud
+
+# Start Ollama server
+ollama serve
+```
+
+### 2. Install & Run HR Agent
 
 ```bash
 # Install dependencies
@@ -12,216 +25,231 @@ pip install -r requirements.txt
 python hr_platform.py
 ```
 
+### 3. Open & Use
+
 Open: **http://localhost:8000**
 
 ---
 
-## 📝 Using the Platform
+## 📝 Using HR Agent
 
 ### Step 1: Create Account
+1. Click "Get Started"
+2. Enter name, email, password
+3. Click "Create Account"
 
-1. Click **"Get Started"** on homepage
-2. Enter your name, email, and password
-3. Click **"Create Account"**
+### Step 2: Sign In
+1. Enter email and password
+2. Click "Sign In"
 
-### Step 2: Analyze Resume
+### Step 3: Analyze Match
+1. Click "New Analysis"
+2. **Upload Resume** (PDF or DOCX)
+3. **Paste Job Description** (complete posting)
+4. Click "Analyze Match"
+5. Wait 30-60 seconds for AI analysis
 
-1. Click **"New Analysis"** button
-2. **Upload your resume**
-   - PDF or DOCX format
-   - Max 10MB
-   - Click the upload box or drag & drop
-3. **Paste job description**
-   - Copy entire job posting
-   - Include requirements, responsibilities, qualifications
-   - Paste in the text area
-
-4. Click **"Analyze Match"**
-
-### Step 3: View Results
-
-You'll see:
-- 🎯 **Match Score** (0-100%) with color indicator
-- ✅ **Your Strengths** - What makes you a great fit
-- ⚠️ **Areas to Address** - Gaps or missing requirements
-- 🎯 **Skills Analysis** - Matched, missing, and additional skills
-- 💼 **Experience Match** - How your experience aligns
-- 🎓 **Education Match** - Educational background fit
-- 💡 **Recommendations** - Actions to improve your match
+### Step 4: Review Results
+- Match score (0-100%)
+- Your strengths
+- Areas to address
+- Skills breakdown
+- Recommendations
 
 ---
 
-## 💡 Tips for Best Results
+## 💡 Tips
 
 ### Resume Tips
-- ✅ Use professional formatting
-- ✅ Include all relevant experience
-- ✅ List skills explicitly
-- ✅ Add quantifiable achievements
-- ✅ Keep it current
+✅ Professional format
+✅ All relevant experience
+✅ Skills listed explicitly
+✅ Quantifiable achievements
+✅ Current information
 
 ### Job Description Tips
-- ✅ Copy the ENTIRE job posting
-- ✅ Don't edit or summarize
-- ✅ Include requirements section
-- ✅ Include responsibilities
-- ✅ Include qualifications/nice-to-haves
+✅ Copy ENTIRE posting
+✅ Include requirements
+✅ Include responsibilities
+✅ Don't edit or summarize
+✅ Include qualifications
 
 ---
 
-## 🎨 Understanding Your Score
+## 🎯 Understanding Scores
 
 ### 🟢 70-100%: Excellent Match
 - You're a strong candidate
 - Most requirements met
-- Apply with confidence
+- Apply confidently
 
 ### 🟡 50-69%: Good Match
 - Solid foundation
-- Some gaps to address
-- Consider applying with tailored cover letter
+- Some gaps exist
+- Tailor resume and apply
 
-### 🔴 0-49%: Needs Improvement
+### 🔴 0-49%: Needs Work
 - Significant gaps
-- Consider skill development first
-- Or look for better-fit positions
+- Build skills first
+- Or find better-fit roles
 
 ---
 
-## 📊 Sample Workflow
+## 🔧 Ollama Setup Details
 
-### Example 1: Checking Before Applying
-
-1. Find interesting job posting
-2. Upload your current resume
-3. Paste job description
-4. Get match score
-5. If 70%+: Apply!
-6. If 50-69%: Tailor resume, then apply
-7. If <50%: Build skills first
-
-### Example 2: Resume Optimization
-
-1. Upload resume
-2. Paste dream job description
-3. Review "Areas to Address"
-4. Update resume based on recommendations
-5. Re-analyze to see improvement
-6. Repeat until satisfied
-
-### Example 3: Multiple Positions
-
-1. Save job descriptions in a document
-2. Analyze same resume with different jobs
-3. Compare match scores
-4. Focus on best-fit opportunities
-5. Track all analyses in dashboard
-
----
-
-## 🔧 Configuration (Optional)
-
-### For AI-Powered Analysis
-
-Create `.env` file:
-```env
-OLLAMA_API_KEY=your-api-key-here
-```
-
-**Note**: The platform works with fallback analysis if not configured.
-
----
-
-## 🐛 Common Issues
-
-### "File too large"
-- Resume must be under 10MB
-- Compress PDF or save as newer format
-
-### "Unsupported format"
-- Only PDF and DOCX supported
-- Convert other formats before uploading
-
-### PDF not parsing correctly
+### Check if Ollama is Running
 ```bash
-pip install --upgrade PyPDF2
+curl http://localhost:11434/api/tags
 ```
 
-### DOCX not parsing correctly
+### Start Ollama
+```bash
+ollama serve
+```
+
+### Pull Model (if not done)
+```bash
+ollama pull gpt-oss:20b-cloud
+```
+
+### Test Model
+```bash
+ollama run gpt-oss:20b-cloud "Hello, how are you?"
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### "Connection refused" Error
+**Problem**: Ollama not running
+**Solution**:
+```bash
+ollama serve
+```
+
+### "Model not found" Error
+**Problem**: Model not pulled
+**Solution**:
+```bash
+ollama pull gpt-oss:20b-cloud
+```
+
+### PDF Not Parsing
+**Solution**:
+```bash
+pip install PyPDF2
+```
+
+### DOCX Not Parsing
+**Solution**:
 ```bash
 pip install python-docx
 ```
 
----
-
-## 📱 Dashboard Features
-
-### Statistics
-- **Total Analyses** - All your job matches
-- **Average Match** - Your overall compatibility
-- **Latest Score** - Most recent analysis
-
-### History
-- View all past analyses
-- Compare different positions
-- Track improvements over time
-- Re-visit old results
+### Slow Analysis
+**Normal**: First analysis may take 60-90 seconds
+**Reason**: Model loading into memory
+**After**: Subsequent analyses are faster (10-30 seconds)
 
 ---
 
-## 🎯 Pro Tips
+## 📊 Example Usage
 
-1. **Be Specific**: More detailed job descriptions = better analysis
-2. **Complete Resume**: Include all relevant experience and skills
-3. **Update Regularly**: Keep resume current between analyses
-4. **Compare Multiple Jobs**: Analyze several positions to find best fit
-5. **Track Progress**: Re-analyze same position after improvements
+### Scenario: Software Engineer Position
+
+1. **Upload** your developer resume (PDF)
+2. **Paste** job description:
+```
+Senior Software Engineer
+Requirements:
+- 5+ years Python
+- FastAPI experience
+- Database knowledge
+- Team collaboration
+```
+3. **Click** "Analyze Match"
+4. **Get** results showing:
+   - Match score: 75%
+   - Pros: Python expertise, FastAPI knowledge
+   - Cons: Missing Docker experience
+   - Recommendations: Add containerization skills
 
 ---
 
-## 🚀 Production Deployment
+## 🔄 Improving Your Score
 
-### VPS/Server
+1. Note recommendations from analysis
+2. Update resume based on feedback
+3. Re-upload and analyze again
+4. Compare scores
+5. Repeat until satisfied
 
+---
+
+## 🌐 Production Deployment
+
+### Local Network Access
 ```bash
-# Install dependencies
-pip install -r requirements.txt gunicorn
-
-# Run with Gunicorn
-gunicorn hr_platform:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+uvicorn hr_platform:app --host 0.0.0.0 --port 8000
 ```
 
-### With Nginx
+### With Systemd (Linux)
+Create `/etc/systemd/system/hr-agent.service`:
+```ini
+[Unit]
+Description=HR Agent
+After=network.target
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+[Service]
+User=your-user
+WorkingDirectory=/path/to/workspace
+ExecStart=/usr/bin/python3 hr_platform.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-### Docker
-
+Enable and start:
 ```bash
-docker build -t resume-analyzer .
-docker run -d -p 8000:8000 --env-file .env resume-analyzer
+sudo systemctl enable hr-agent
+sudo systemctl start hr-agent
 ```
 
 ---
 
-## 📞 Need Help?
+## 📁 Project Structure
 
-- Check README.md for full documentation
-- Review error messages in browser console
-- Ensure all dependencies installed
-- Verify file formats (PDF, DOCX only)
+```
+/workspace/
+├── hr_platform.py      # Main application
+├── hr_agent.db         # Database (auto-created)
+├── uploads/            # Resume files (auto-created)
+├── requirements.txt    # Python dependencies
+└── README.md          # Full documentation
+```
 
 ---
 
-**Happy Analyzing! Find your perfect job match! 🎯**
+## ⚡ Performance
+
+- **First Analysis**: 60-90 seconds (model loading)
+- **Subsequent**: 10-30 seconds
+- **Concurrent Users**: Depends on hardware
+- **RAM Usage**: ~2-4GB (model in memory)
+
+---
+
+## 🎨 Design
+
+**Pure Black & White:**
+- Black background for focus
+- White text for readability
+- Color only for data (green/yellow/red)
+- Minimalist and professional
+- Clean typography
+
+---
+
+**Ready to find your perfect job match!** 🎯
