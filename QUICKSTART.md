@@ -1,199 +1,198 @@
-# Resume Analyzer - Quick Start Guide
+# Quick Start Guide - Resume Analyzer
 
-## 🚀 Get Started in 3 Minutes
+## 🚀 Get Started in 3 Steps
 
-### Step 1: Install
+### 1. Install & Run
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### Step 2: Run
-
-```bash
+# Run the app
 python hr_platform.py
 ```
 
-The app will be available at: **http://localhost:8000**
+Open: **http://localhost:8000**
 
 ---
 
-## 📝 First Time Setup
+## 📝 Using the Platform
 
-### 1. Create Account
+### Step 1: Create Account
 
-- Go to http://localhost:8000
-- Click **"Get Started"**
-- Fill in:
-  - Full name
-  - Email address
-  - Password (min 6 characters)
-- Click **"Create account"**
+1. Click **"Get Started"** on homepage
+2. Enter your name, email, and password
+3. Click **"Create Account"**
 
-### 2. Sign In
+### Step 2: Analyze Resume
 
-- Click **"Sign In"**
-- Enter your email and password
-- Access your dashboard
+1. Click **"New Analysis"** button
+2. **Upload your resume**
+   - PDF or DOCX format
+   - Max 10MB
+   - Click the upload box or drag & drop
+3. **Paste job description**
+   - Copy entire job posting
+   - Include requirements, responsibilities, qualifications
+   - Paste in the text area
 
-### 3. Upload Resume
+4. Click **"Analyze Match"**
 
-- Click **"Upload Resume"** button
-- Select your file (PDF, DOCX, or image)
-- Click **"Analyze Resume"**
-- Wait for AI analysis (5-30 seconds)
+### Step 3: View Results
 
-### 4. View Results
-
-Your analysis includes:
-- ✅ **Match Score** with color coding:
-  - 🟢 Green (70-100%): Excellent
-  - 🟡 Yellow (50-69%): Good
-  - 🔴 Red (0-49%): Needs improvement
-- 📊 **Strengths & Weaknesses**
-- 🛠️ **Skills Assessment**
-- 💼 **Experience Evaluation**
-- 🎓 **Education Review**
-- 🚀 **Development Plan**
-- 📝 **Resume Recommendations**
-
----
-
-## 🎨 Interface Overview
-
-### GitHub-Style Dark Theme
-- Clean, professional design
-- Easy navigation
-- Clear visual hierarchy
-- Color-coded results
-
-### Key Pages
-- **Dashboard** - Overview and history
-- **Upload** - Analyze new resume
-- **Profile** - Account information
-- **Analysis** - Detailed results
-
----
-
-## 🔧 Optional Configuration
-
-### For Ollama Cloud API
-
-1. Copy environment file:
-```bash
-cp .env.example .env
-```
-
-2. Edit `.env`:
-```env
-OLLAMA_API_KEY=your-api-key-here
-```
-
-3. Restart the application
-
-**Note**: The app works with fallback analysis if Ollama is not configured.
-
----
-
-## 📁 Supported Files
-
-- **PDF** - Best for formatted resumes
-- **DOCX/DOC** - Microsoft Word documents
-- **Images** - PNG, JPG (requires Tesseract OCR)
-
-### File Requirements
-- Max size: 10MB
-- Text should be clear and readable
-- Structured format recommended
-
----
-
-## 🐛 Troubleshooting
-
-### Can't parse PDF?
-```bash
-pip install PyPDF2
-```
-
-### Can't parse DOCX?
-```bash
-pip install python-docx
-```
-
-### Can't parse images?
-```bash
-# Install Tesseract OCR
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr
-
-# MacOS
-brew install tesseract
-
-# Python library
-pip install pytesseract Pillow
-```
-
-### Port 8000 already in use?
-```bash
-# Use different port
-python hr_platform.py --port 8080
-```
-
-Or edit the file and change port in the last line.
+You'll see:
+- 🎯 **Match Score** (0-100%) with color indicator
+- ✅ **Your Strengths** - What makes you a great fit
+- ⚠️ **Areas to Address** - Gaps or missing requirements
+- 🎯 **Skills Analysis** - Matched, missing, and additional skills
+- 💼 **Experience Match** - How your experience aligns
+- 🎓 **Education Match** - Educational background fit
+- 💡 **Recommendations** - Actions to improve your match
 
 ---
 
 ## 💡 Tips for Best Results
 
-### Resume Preparation
-1. Use clear, readable fonts
-2. Include contact information
-3. List skills explicitly
-4. Quantify achievements
-5. Highlight education
+### Resume Tips
+- ✅ Use professional formatting
+- ✅ Include all relevant experience
+- ✅ List skills explicitly
+- ✅ Add quantifiable achievements
+- ✅ Keep it current
 
-### Getting Better Scores
-1. Add relevant keywords
-2. Include certifications
-3. Describe projects in detail
-4. Show career progression
-5. Follow recommendations from analysis
-
----
-
-## 📈 Understanding Your Score
-
-- **90-100%**: Outstanding resume, ready for top positions
-- **70-89%**: Strong resume, minor improvements recommended
-- **50-69%**: Good foundation, several areas to enhance
-- **30-49%**: Needs significant improvements
-- **0-29%**: Major restructuring required
+### Job Description Tips
+- ✅ Copy the ENTIRE job posting
+- ✅ Don't edit or summarize
+- ✅ Include requirements section
+- ✅ Include responsibilities
+- ✅ Include qualifications/nice-to-haves
 
 ---
 
-## 🔄 Iterative Improvement
+## 🎨 Understanding Your Score
 
-1. Upload current resume
-2. Review analysis
-3. Apply recommendations
-4. Re-upload improved version
-5. Compare scores
+### 🟢 70-100%: Excellent Match
+- You're a strong candidate
+- Most requirements met
+- Apply with confidence
+
+### 🟡 50-69%: Good Match
+- Solid foundation
+- Some gaps to address
+- Consider applying with tailored cover letter
+
+### 🔴 0-49%: Needs Improvement
+- Significant gaps
+- Consider skill development first
+- Or look for better-fit positions
+
+---
+
+## 📊 Sample Workflow
+
+### Example 1: Checking Before Applying
+
+1. Find interesting job posting
+2. Upload your current resume
+3. Paste job description
+4. Get match score
+5. If 70%+: Apply!
+6. If 50-69%: Tailor resume, then apply
+7. If <50%: Build skills first
+
+### Example 2: Resume Optimization
+
+1. Upload resume
+2. Paste dream job description
+3. Review "Areas to Address"
+4. Update resume based on recommendations
+5. Re-analyze to see improvement
 6. Repeat until satisfied
 
+### Example 3: Multiple Positions
+
+1. Save job descriptions in a document
+2. Analyze same resume with different jobs
+3. Compare match scores
+4. Focus on best-fit opportunities
+5. Track all analyses in dashboard
+
 ---
 
-## 🚀 Production Tips
+## 🔧 Configuration (Optional)
 
-### For VPS Deployment
+### For AI-Powered Analysis
+
+Create `.env` file:
+```env
+OLLAMA_API_KEY=your-api-key-here
+```
+
+**Note**: The platform works with fallback analysis if not configured.
+
+---
+
+## 🐛 Common Issues
+
+### "File too large"
+- Resume must be under 10MB
+- Compress PDF or save as newer format
+
+### "Unsupported format"
+- Only PDF and DOCX supported
+- Convert other formats before uploading
+
+### PDF not parsing correctly
+```bash
+pip install --upgrade PyPDF2
+```
+
+### DOCX not parsing correctly
+```bash
+pip install python-docx
+```
+
+---
+
+## 📱 Dashboard Features
+
+### Statistics
+- **Total Analyses** - All your job matches
+- **Average Match** - Your overall compatibility
+- **Latest Score** - Most recent analysis
+
+### History
+- View all past analyses
+- Compare different positions
+- Track improvements over time
+- Re-visit old results
+
+---
+
+## 🎯 Pro Tips
+
+1. **Be Specific**: More detailed job descriptions = better analysis
+2. **Complete Resume**: Include all relevant experience and skills
+3. **Update Regularly**: Keep resume current between analyses
+4. **Compare Multiple Jobs**: Analyze several positions to find best fit
+5. **Track Progress**: Re-analyze same position after improvements
+
+---
+
+## 🚀 Production Deployment
+
+### VPS/Server
+
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt gunicorn
 
 # Run with Gunicorn
 gunicorn hr_platform:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
-### With Nginx Reverse Proxy
+### With Nginx
+
 ```nginx
 server {
     listen 80;
@@ -207,15 +206,22 @@ server {
 }
 ```
 
+### Docker
+
+```bash
+docker build -t resume-analyzer .
+docker run -d -p 8000:8000 --env-file .env resume-analyzer
+```
+
 ---
 
 ## 📞 Need Help?
 
-- Check the full README.md
-- Review error messages in console
-- Ensure all dependencies are installed
-- Verify file formats are supported
+- Check README.md for full documentation
+- Review error messages in browser console
+- Ensure all dependencies installed
+- Verify file formats (PDF, DOCX only)
 
 ---
 
-**Ready to improve your resume? Let's get started! 🎯**
+**Happy Analyzing! Find your perfect job match! 🎯**

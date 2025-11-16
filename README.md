@@ -1,198 +1,239 @@
-# Resume Analyzer
+# Resume Analyzer - Job Match Platform
 
-AI-powered resume analysis platform for job seekers. Get instant feedback, detailed insights, and personalized development recommendations.
+AI-powered platform that compares your resume with job descriptions and shows how well you match the position.
 
-## 🎯 Features
+## ✨ Features
 
-- **AI-Powered Analysis** - Intelligent resume analysis using Ollama Cloud
-- **Match Scoring** - Get a comprehensive score (0-100%) for your resume
-- **Detailed Insights** - Strengths, weaknesses, and areas for improvement
-- **Skills Assessment** - Technical skills, soft skills, and recommendations
-- **Development Plan** - Personalized career growth recommendations
-- **Resume Improvements** - Specific suggestions to enhance your resume
-- **GitHub-Style UI** - Modern, clean dark theme interface
+- **Upload Resume** - Support for PDF and DOCX formats
+- **Job Description Analysis** - Paste full job posting for comparison
+- **Match Percentage** - Get clear % score showing your fit
+- **Pros & Cons** - See your strengths and areas to improve
+- **Skills Analysis** - Matched, missing, and additional skills
+- **Experience & Education Match** - Detailed scoring with progress bars
+- **Recommendations** - Actionable advice to improve your match
+- **Beautiful UI** - v0.dev-inspired clean and modern design
 
-## 🛠 Technology Stack
+## 🎨 Design
 
-- **Backend**: FastAPI
-- **Database**: SQLite
-- **AI**: Ollama Cloud (gpt-oss:20b-cloud)
-- **Frontend**: HTML + Embedded CSS/JS
-- **Architecture**: Single-file modular structure
+Inspired by Vercel's v0.dev platform:
+- Clean, minimalist interface
+- Subtle gradients and shadows
+- Modern typography (Inter font)
+- Responsive layout
+- Smooth transitions
 
-## 🎨 Design System
+## 🚀 Quick Start
 
-Inspired by GitHub's interface:
-- **Dark Theme**: Professional and modern
-- **Color Palette**: 
-  - Background: `#0d1117` (dark)
-  - Foreground: `#e6edf3` (light)
-  - Borders: `#30363d`
-  - Accent: `#58a6ff` (blue)
-  - Success: `#3fb950` (green) - 70%+
-  - Warning: `#d29922` (yellow) - 50-69%
-  - Danger: `#f85149` (red) - <50%
+### Installation
 
-## 📦 Installation
-
-### Prerequisites
-
-- Python 3.8+
-- pip
-- (Optional) Tesseract OCR for image parsing
-
-### Quick Start
-
-1. **Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Configure environment**
-```bash
-cp .env.example .env
-# Edit .env with your Ollama API key
-```
+### Run
 
-3. **Run the application**
 ```bash
 python hr_platform.py
 ```
 
 Or:
+
 ```bash
 uvicorn hr_platform:app --host 0.0.0.0 --port 8000
 ```
 
-4. **Access the platform**
-Open: `http://localhost:8000`
+Open: **http://localhost:8000**
+
+## 📋 How It Works
+
+1. **Sign Up** - Create your account
+2. **Upload Resume** - PDF or DOCX format
+3. **Paste Job Description** - Full job posting with requirements
+4. **Get Results** - Instant AI-powered analysis showing:
+   - Match percentage (0-100%)
+   - Your strengths for this role
+   - Areas needing improvement
+   - Skills breakdown
+   - Experience and education match
+   - Actionable recommendations
+
+## 🎯 Match Scoring
+
+- **70-100%** 🟢 Excellent Match - You're a strong candidate
+- **50-69%** 🟡 Good Match - Some gaps to address
+- **0-49%** 🔴 Needs Work - Significant improvements needed
+
+## 🛠 Technology
+
+- **Backend**: FastAPI
+- **Database**: SQLite
+- **AI**: Ollama Cloud (gpt-oss:20b-cloud)
+- **Frontend**: Pure HTML/CSS (no frameworks)
+- **Styling**: v0.dev-inspired custom CSS
+
+## 📄 Supported Formats
+
+- **PDF** - Best for formatted resumes
+- **DOCX** - Microsoft Word documents
 
 ## 🔧 Configuration
 
-Edit `.env` file:
+Create `.env` file:
 
 ```env
-SECRET_KEY=your-secret-key-here
+SECRET_KEY=your-secret-key
 OLLAMA_API_URL=https://api.ollama.cloud/v1/chat/completions
-OLLAMA_API_KEY=your-ollama-api-key-here
+OLLAMA_API_KEY=your-api-key
 ```
 
-## 📱 User Flow
+**Note**: The platform works with fallback analysis if Ollama is not configured.
 
-1. **Register** - Create your account
-2. **Login** - Sign in to your dashboard
-3. **Upload** - Upload your resume (PDF, DOCX, or image)
-4. **Analyze** - AI analyzes your resume automatically
-5. **Review** - Get detailed insights and recommendations
-6. **Improve** - Apply suggestions and re-upload
+## 📊 Analysis Output
 
-## 📄 Supported File Formats
+The AI compares your resume with the job description and provides:
 
-- PDF (.pdf)
-- Microsoft Word (.docx, .doc)
-- Images (.png, .jpg, .jpeg) - with OCR
+### Match Score
+- Overall percentage (0-100%)
+- Color-coded indicator
+- Summary assessment
 
-## 🗄 Database Schema
+### Pros (Strengths)
+- 5-7 strong matches between your resume and job requirements
+- What makes you a great fit
+- Your competitive advantages
 
-### Users
-- id, email, password_hash, full_name, created_at, last_login, is_active
+### Cons (Areas to Address)
+- 5-7 gaps or missing requirements
+- Skills you need to develop
+- Experience areas to strengthen
 
-### Analyses
-- id, user_id, filename, file_path, match_score, analysis_data, created_at
+### Skills Match
+- **Matched Skills**: Your skills that align with requirements
+- **Missing Skills**: Required skills not in your resume
+- **Additional Skills**: Extra qualifications you bring
 
-### Sessions
-- id, session_token, user_id, expires_at, created_at
+### Experience Match
+- Percentage score
+- Detailed analysis of your experience vs requirements
+- Progress bar visualization
+
+### Education Match
+- Percentage score
+- Analysis of education vs requirements
+- Progress bar visualization
+
+### Recommendations
+- 5-7 specific actions to improve your match
+- Tailored advice for this position
+- Practical next steps
+
+## 🗄 Database
+
+SQLite database with tables:
+- `users` - User accounts
+- `analyses` - Job match analyses
+- `sessions` - Authentication sessions
+
+## 🔒 Security
+
+- Session-based authentication
+- Password hashing (SHA-256)
+- HTTP-only cookies
+- File size limits (10MB)
+- File type validation
+
+## 📱 Pages
+
+- **Landing** - Hero section with features
+- **Sign In/Up** - Authentication pages
+- **Dashboard** - Overview with statistics
+- **Analyze** - Upload resume + job description
+- **Results** - Detailed match analysis
+- **Profile** - Account information
+
+## 🎨 UI Components
+
+- Gradient stat cards
+- Circular score indicator
+- Progress bars
+- Feature lists with icons
+- Skill badges
+- Responsive tables
+- Modern forms
+
+## 💡 Tips for Best Results
+
+### Resume Preparation
+1. Use clear, professional formatting
+2. Include all relevant experience
+3. List technical and soft skills explicitly
+4. Quantify achievements
+5. Keep it updated
+
+### Job Description
+1. Copy the entire job posting
+2. Include all requirements
+3. Add responsibilities section
+4. Include qualifications
+5. Don't edit or summarize
 
 ## 🚀 Production Deployment
 
-### Using Uvicorn
-
+### Uvicorn
 ```bash
 uvicorn hr_platform:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-### Using Gunicorn
-
+### Gunicorn
 ```bash
 gunicorn hr_platform:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ### Docker
-
 ```bash
 docker build -t resume-analyzer .
 docker run -d -p 8000:8000 --env-file .env resume-analyzer
 ```
 
-Or with Docker Compose:
+## 🐛 Troubleshooting
 
+### PDF parsing issues
 ```bash
-docker-compose up -d
+pip install PyPDF2
 ```
 
-## 🔒 Security Features
-
-- Session-based authentication
-- Password hashing with SHA-256
-- HTTP-only cookies
-- File size limitations (10MB)
-- File type validation
-- CSRF protection
-
-## 📊 API Endpoints
-
-### Public
-- `GET /` - Landing page
-- `GET /login` - Login page
-- `POST /login` - Login handler
-- `GET /register` - Registration page
-- `POST /register` - Registration handler
-
-### Authenticated
-- `GET /dashboard` - User dashboard
-- `GET /profile` - User profile
-- `GET /upload` - Upload page
-- `POST /upload` - File upload handler
-- `GET /analysis/{id}` - Analysis results
-- `GET /logout` - Logout handler
-
-### System
-- `GET /api/health` - Health check
-
-## 📈 Analysis Output
-
-The AI provides:
-
-- **Match Score** (0-100%)
-- **Strengths** - Key positive points
-- **Weaknesses** - Areas needing improvement
-- **Skills Match**:
-  - Technical skills detected
-  - Soft skills detected
-  - Missing skills recommendations
-- **Experience Assessment** - Detailed evaluation
-- **Education Assessment** - Academic background review
-- **Development Plan** - Career growth steps
-- **Resume Recommendations** - Specific improvements
-- **Summary** - Overall assessment
-
-## 🧪 Testing
-
+### DOCX parsing issues
 ```bash
-# Create test account via web interface
-# Upload sample resume
-# View analysis results
+pip install python-docx
 ```
+
+### Port in use
+Change port in `hr_platform.py` or run:
+```bash
+uvicorn hr_platform:app --port 8080
+```
+
+## 📈 Example Use Cases
+
+1. **Job Applications** - Check match before applying
+2. **Resume Optimization** - Tailor resume to job postings
+3. **Career Planning** - Identify skills to develop
+4. **Interview Prep** - Know your strengths and gaps
+5. **Multiple Positions** - Compare fit for different roles
+
+## 🤝 Contributing
+
+This is a production-ready single-file application. Easy to:
+- Deploy anywhere
+- Customize styling
+- Extend functionality
+- Integrate with other tools
 
 ## 📝 License
 
 See LICENSE file
 
-## 🤝 Support
-
-For issues and questions, please open an issue on GitHub.
-
 ---
 
-**Resume Analyzer** - AI-Powered Career Development Tool
-Version 2.0.0
+**Resume Analyzer** - Match Your Resume with Your Dream Job
+Version 3.0.0
