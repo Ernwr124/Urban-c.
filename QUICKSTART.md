@@ -1,181 +1,221 @@
-# HR Platform - Быстрый старт
+# Resume Analyzer - Quick Start Guide
 
-## 🚀 Запуск за 3 шага
+## 🚀 Get Started in 3 Minutes
 
-### 1. Установка зависимостей
+### Step 1: Install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Настройка (опционально)
-
-Если используете Ollama Cloud API:
-
-```bash
-cp .env.example .env
-nano .env  # Добавьте ваш API ключ
-```
-
-### 3. Запуск
+### Step 2: Run
 
 ```bash
 python hr_platform.py
 ```
 
-Или используйте скрипт запуска:
+The app will be available at: **http://localhost:8000**
 
+---
+
+## 📝 First Time Setup
+
+### 1. Create Account
+
+- Go to http://localhost:8000
+- Click **"Get Started"**
+- Fill in:
+  - Full name
+  - Email address
+  - Password (min 6 characters)
+- Click **"Create account"**
+
+### 2. Sign In
+
+- Click **"Sign In"**
+- Enter your email and password
+- Access your dashboard
+
+### 3. Upload Resume
+
+- Click **"Upload Resume"** button
+- Select your file (PDF, DOCX, or image)
+- Click **"Analyze Resume"**
+- Wait for AI analysis (5-30 seconds)
+
+### 4. View Results
+
+Your analysis includes:
+- ✅ **Match Score** with color coding:
+  - 🟢 Green (70-100%): Excellent
+  - 🟡 Yellow (50-69%): Good
+  - 🔴 Red (0-49%): Needs improvement
+- 📊 **Strengths & Weaknesses**
+- 🛠️ **Skills Assessment**
+- 💼 **Experience Evaluation**
+- 🎓 **Education Review**
+- 🚀 **Development Plan**
+- 📝 **Resume Recommendations**
+
+---
+
+## 🎨 Interface Overview
+
+### GitHub-Style Dark Theme
+- Clean, professional design
+- Easy navigation
+- Clear visual hierarchy
+- Color-coded results
+
+### Key Pages
+- **Dashboard** - Overview and history
+- **Upload** - Analyze new resume
+- **Profile** - Account information
+- **Analysis** - Detailed results
+
+---
+
+## 🔧 Optional Configuration
+
+### For Ollama Cloud API
+
+1. Copy environment file:
 ```bash
-./start.sh
+cp .env.example .env
 ```
 
-Платформа будет доступна по адресу: **http://localhost:8000**
+2. Edit `.env`:
+```env
+OLLAMA_API_KEY=your-api-key-here
+```
+
+3. Restart the application
+
+**Note**: The app works with fallback analysis if Ollama is not configured.
 
 ---
 
-## 📋 Первый вход
+## 📁 Supported Files
 
-### Создание аккаунта
+- **PDF** - Best for formatted resumes
+- **DOCX/DOC** - Microsoft Word documents
+- **Images** - PNG, JPG (requires Tesseract OCR)
 
-1. Перейдите на http://localhost:8000
-2. Нажмите "Get Started" или "Register"
-3. Заполните форму:
-   - **Full Name**: Ваше имя
-   - **Email**: Ваш email
-   - **Password**: Минимум 6 символов
-   - **Role**: Выберите `Candidate` или `HR Specialist`
-4. Нажмите "Create Account"
-
-### Вход в систему
-
-1. Перейдите на `/login`
-2. Введите email и пароль
-3. Нажмите "Sign In"
+### File Requirements
+- Max size: 10MB
+- Text should be clear and readable
+- Structured format recommended
 
 ---
 
-## 🎯 Основные функции
+## 🐛 Troubleshooting
 
-### Для Кандидатов
-
-1. **Загрузка резюме**: Dashboard → Upload → Выберите файл
-2. **Просмотр анализа**: После загрузки откроется страница с результатами
-3. **План развития**: В результатах анализа найдете персональные рекомендации
-
-### Для HR-специалистов
-
-1. **Анализ резюме**: Upload → Загрузите резюме кандидата
-2. **Просмотр статистики**: Dashboard → Общая статистика
-3. **Админ-панель**: Admin → Управление пользователями
-
----
-
-## 📁 Поддерживаемые форматы
-
-- ✅ PDF (.pdf)
-- ✅ Microsoft Word (.docx, .doc)
-- ✅ Изображения (.png, .jpg, .jpeg) - требует Tesseract OCR
-
----
-
-## 🔧 Устранение проблем
-
-### Ошибка импорта PyPDF2
-
+### Can't parse PDF?
 ```bash
 pip install PyPDF2
 ```
 
-### Ошибка импорта python-docx
-
+### Can't parse DOCX?
 ```bash
 pip install python-docx
 ```
 
-### OCR для изображений не работает
-
+### Can't parse images?
 ```bash
+# Install Tesseract OCR
 # Ubuntu/Debian
 sudo apt-get install tesseract-ocr
 
 # MacOS
 brew install tesseract
 
-# Python библиотека
-pip install pytesseract
+# Python library
+pip install pytesseract Pillow
 ```
 
-### База данных не создается
-
-Проверьте права доступа к директории:
-
+### Port 8000 already in use?
 ```bash
-chmod 755 /workspace
+# Use different port
+python hr_platform.py --port 8080
 ```
+
+Or edit the file and change port in the last line.
 
 ---
 
-## 🌐 Production Deploy
+## 💡 Tips for Best Results
 
-### Использование Gunicorn
+### Resume Preparation
+1. Use clear, readable fonts
+2. Include contact information
+3. List skills explicitly
+4. Quantify achievements
+5. Highlight education
 
+### Getting Better Scores
+1. Add relevant keywords
+2. Include certifications
+3. Describe projects in detail
+4. Show career progression
+5. Follow recommendations from analysis
+
+---
+
+## 📈 Understanding Your Score
+
+- **90-100%**: Outstanding resume, ready for top positions
+- **70-89%**: Strong resume, minor improvements recommended
+- **50-69%**: Good foundation, several areas to enhance
+- **30-49%**: Needs significant improvements
+- **0-29%**: Major restructuring required
+
+---
+
+## 🔄 Iterative Improvement
+
+1. Upload current resume
+2. Review analysis
+3. Apply recommendations
+4. Re-upload improved version
+5. Compare scores
+6. Repeat until satisfied
+
+---
+
+## 🚀 Production Tips
+
+### For VPS Deployment
 ```bash
-pip install gunicorn
+# Install dependencies
+pip install -r requirements.txt
+
+# Run with Gunicorn
 gunicorn hr_platform:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
-### Использование systemd (Linux)
-
-Создайте файл `/etc/systemd/system/hrplatform.service`:
-
-```ini
-[Unit]
-Description=HR Platform
-After=network.target
-
-[Service]
-User=www-data
-WorkingDirectory=/path/to/workspace
-Environment="PATH=/path/to/venv/bin"
-ExecStart=/path/to/venv/bin/uvicorn hr_platform:app --host 0.0.0.0 --port 8000
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Запустите:
-
-```bash
-sudo systemctl enable hrplatform
-sudo systemctl start hrplatform
+### With Nginx Reverse Proxy
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
 ---
 
-## 📊 Структура файлов
+## 📞 Need Help?
 
-```
-workspace/
-├── hr_platform.py      # Главный файл приложения
-├── requirements.txt    # Зависимости
-├── .env.example       # Пример конфигурации
-├── start.sh           # Скрипт запуска
-├── README.md          # Полная документация
-├── QUICKSTART.md      # Этот файл
-└── uploads/           # Загруженные файлы (создается автоматически)
-```
+- Check the full README.md
+- Review error messages in console
+- Ensure all dependencies are installed
+- Verify file formats are supported
 
 ---
 
-## 🆘 Поддержка
-
-При возникновении проблем:
-
-1. Проверьте логи в консоли
-2. Убедитесь что все зависимости установлены
-3. Проверьте права доступа к файлам
-4. Убедитесь что порт 8000 свободен
-
----
-
-**Успешной работы! 🎉**
+**Ready to improve your resume? Let's get started! 🎯**

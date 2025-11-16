@@ -1,15 +1,16 @@
-# HR Agent Platform
+# Resume Analyzer
 
-Professional HR service for intelligent resume analysis, candidate comparison, and compliance checking with Kazakhstan Labor Code.
+AI-powered resume analysis platform for job seekers. Get instant feedback, detailed insights, and personalized development recommendations.
 
 ## 🎯 Features
 
-- **AI-Powered Resume Analysis** - Intelligent analysis using Ollama Cloud
-- **Dual Role System** - Separate interfaces for Candidates and HR Specialists
-- **Match Scoring** - Automated candidate-vacancy matching
-- **Development Plans** - Personalized career development recommendations
-- **Labor Code Compliance** - Verify vacancy requirements against TK RK
-- **Professional UI** - Clean, corporate design (white & black theme)
+- **AI-Powered Analysis** - Intelligent resume analysis using Ollama Cloud
+- **Match Scoring** - Get a comprehensive score (0-100%) for your resume
+- **Detailed Insights** - Strengths, weaknesses, and areas for improvement
+- **Skills Assessment** - Technical skills, soft skills, and recommendations
+- **Development Plan** - Personalized career growth recommendations
+- **Resume Improvements** - Specific suggestions to enhance your resume
+- **GitHub-Style UI** - Modern, clean dark theme interface
 
 ## 🛠 Technology Stack
 
@@ -18,6 +19,19 @@ Professional HR service for intelligent resume analysis, candidate comparison, a
 - **AI**: Ollama Cloud (gpt-oss:20b-cloud)
 - **Frontend**: HTML + Embedded CSS/JS
 - **Architecture**: Single-file modular structure
+
+## 🎨 Design System
+
+Inspired by GitHub's interface:
+- **Dark Theme**: Professional and modern
+- **Color Palette**: 
+  - Background: `#0d1117` (dark)
+  - Foreground: `#e6edf3` (light)
+  - Borders: `#30363d`
+  - Accent: `#58a6ff` (blue)
+  - Success: `#3fb950` (green) - 70%+
+  - Warning: `#d29922` (yellow) - 50-69%
+  - Danger: `#f85149` (red) - <50%
 
 ## 📦 Installation
 
@@ -29,36 +43,29 @@ Professional HR service for intelligent resume analysis, candidate comparison, a
 
 ### Quick Start
 
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd workspace
-```
-
-2. **Install dependencies**
+1. **Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Configure environment**
+2. **Configure environment**
 ```bash
 cp .env.example .env
 # Edit .env with your Ollama API key
 ```
 
-4. **Run the application**
+3. **Run the application**
 ```bash
 python hr_platform.py
 ```
 
-Or use the startup script:
+Or:
 ```bash
-chmod +x start.sh
-./start.sh
+uvicorn hr_platform:app --host 0.0.0.0 --port 8000
 ```
 
-5. **Access the platform**
-Open your browser and navigate to: `http://localhost:8000`
+4. **Access the platform**
+Open: `http://localhost:8000`
 
 ## 🔧 Configuration
 
@@ -70,30 +77,14 @@ OLLAMA_API_URL=https://api.ollama.cloud/v1/chat/completions
 OLLAMA_API_KEY=your-ollama-api-key-here
 ```
 
-## 📱 User Roles
+## 📱 User Flow
 
-### Candidate
-- Upload personal resume
-- Get AI-powered analysis
-- Receive development recommendations
-- View skills assessment
-- Get resume improvement suggestions
-
-### HR Specialist
-- Upload candidate resumes
-- Compare multiple candidates
-- View match scores
-- Check TK RK compliance
-- Access analytics dashboard
-- Admin panel access
-
-## 🎨 Design System
-
-- **Primary Color**: #2563eb (Blue)
-- **Background**: #ffffff (White)
-- **Text**: #0f0f0f (Black)
-- **Accent**: #0ea5e9 (Success)
-- **Error**: #ef4444 (Error)
+1. **Register** - Create your account
+2. **Login** - Sign in to your dashboard
+3. **Upload** - Upload your resume (PDF, DOCX, or image)
+4. **Analyze** - AI analyzes your resume automatically
+5. **Review** - Get detailed insights and recommendations
+6. **Improve** - Apply suggestions and re-upload
 
 ## 📄 Supported File Formats
 
@@ -104,13 +95,10 @@ OLLAMA_API_KEY=your-ollama-api-key-here
 ## 🗄 Database Schema
 
 ### Users
-- id, email, password_hash, full_name, role, created_at, last_login, is_active
+- id, email, password_hash, full_name, created_at, last_login, is_active
 
 ### Analyses
-- id, user_id, candidate_name, filename, file_path, analysis_type, match_score, analysis_data, created_at
-
-### Analytics
-- id, user_id, action, meta_data, created_at
+- id, user_id, filename, file_path, match_score, analysis_data, created_at
 
 ### Sessions
 - id, session_token, user_id, expires_at, created_at
@@ -129,33 +117,27 @@ uvicorn hr_platform:app --host 0.0.0.0 --port 8000 --workers 4
 gunicorn hr_platform:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
-### Docker (Optional)
+### Docker
 
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY hr_platform.py .
-COPY .env .
-
-RUN mkdir -p uploads
-
-EXPOSE 8000
-
-CMD ["uvicorn", "hr_platform:app", "--host", "0.0.0.0", "--port", "8000"]
+```bash
+docker build -t resume-analyzer .
+docker run -d -p 8000:8000 --env-file .env resume-analyzer
 ```
 
-## 🔒 Security Notes
+Or with Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+## 🔒 Security Features
 
 - Session-based authentication
 - Password hashing with SHA-256
 - HTTP-only cookies
 - File size limitations (10MB)
 - File type validation
+- CSRF protection
 
 ## 📊 API Endpoints
 
@@ -174,22 +156,32 @@ CMD ["uvicorn", "hr_platform:app", "--host", "0.0.0.0", "--port", "8000"]
 - `GET /analysis/{id}` - Analysis results
 - `GET /logout` - Logout handler
 
-### HR Only
-- `GET /admin` - Admin panel
-
 ### System
 - `GET /api/health` - Health check
 
+## 📈 Analysis Output
+
+The AI provides:
+
+- **Match Score** (0-100%)
+- **Strengths** - Key positive points
+- **Weaknesses** - Areas needing improvement
+- **Skills Match**:
+  - Technical skills detected
+  - Soft skills detected
+  - Missing skills recommendations
+- **Experience Assessment** - Detailed evaluation
+- **Education Assessment** - Academic background review
+- **Development Plan** - Career growth steps
+- **Resume Recommendations** - Specific improvements
+- **Summary** - Overall assessment
+
 ## 🧪 Testing
 
-Create test user:
 ```bash
-# Register via web interface or directly in database
-```
-
-Test file upload:
-```bash
-# Use web interface at /upload
+# Create test account via web interface
+# Upload sample resume
+# View analysis results
 ```
 
 ## 📝 License
@@ -198,9 +190,9 @@ See LICENSE file
 
 ## 🤝 Support
 
-For issues and questions, please contact the development team.
+For issues and questions, please open an issue on GitHub.
 
 ---
 
-**HR Agent Platform** - Professional HR Service
-Version 1.0.0
+**Resume Analyzer** - AI-Powered Career Development Tool
+Version 2.0.0
