@@ -110,7 +110,7 @@ OLLAMA_API_KEY=your-ollama-api-key-here
 - id, user_id, candidate_name, filename, file_path, analysis_type, match_score, analysis_data, created_at
 
 ### Analytics
-- id, user_id, action, metadata, created_at
+- id, user_id, action, meta_data, created_at
 
 ### Sessions
 - id, session_token, user_id, expires_at, created_at

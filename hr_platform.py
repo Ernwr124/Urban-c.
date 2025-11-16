@@ -113,7 +113,7 @@ class Analytics(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     action = Column(String)  # 'login', 'upload', 'analysis', etc.
-    metadata = Column(Text)  # JSON
+    meta_data = Column(Text)  # JSON (renamed from 'metadata' to avoid SQLAlchemy conflict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -1329,7 +1329,7 @@ async def login_post(
     analytics = Analytics(
         user_id=user.id,
         action="login",
-        metadata=json.dumps({"email": email})
+        meta_data=json.dumps({"email": email})
     )
     db.add(analytics)
     
@@ -1463,7 +1463,7 @@ async def upload_post(
     analytics = Analytics(
         user_id=user.id,
         action="upload",
-        metadata=json.dumps({"filename": file.filename})
+        meta_data=json.dumps({"filename": file.filename})
     )
     db.add(analytics)
     
