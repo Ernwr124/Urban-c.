@@ -24,7 +24,10 @@ from docx import Document
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from jinja2 import BaseLoader, Environment
-from pdfminer.high_level import extract_text as pdf_extract_text
+try:
+    from pdfminer.high_level import extract_text as pdf_extract_text
+except ImportError:  # fallback when pdfminer.six отсутствует
+    pdf_extract_text = None
 from pydantic import BaseModel, EmailStr, Field, validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.middleware.sessions import SessionMiddleware
@@ -35,6 +38,9 @@ DB_PATH = Path(__file__).with_name("hr_agent.db")
 OLLAMA_MODEL = "gpt-oss:20b-cloud"
 SESSION_SECRET = os.getenv("HR_AGENT_SESSION_SECRET", secrets.token_hex(32))
 PASSWORD_SALT = os.getenv("HR_AGENT_PASSWORD_SALT", "hr-agent-salt")
+ADMIN_USERNAME = os.getenv("HR_AGENT_ADMIN_LOGIN", "founder")
+ADMIN_PASSWORD_HASH_ENV = os.getenv("HR_AGENT_ADMIN_PASSWORD_HASH")
+ADMIN_PASSWORD_PLAIN = os.getenv("HR_AGENT_ADMIN_PASSWORD")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -83,6 +89,7 @@ def init_db() -> None:
             matched_keywords TEXT,
             missing_keywords TEXT,
             score INTEGER NOT NULL,
+            engine TEXT DEFAULT 'heuristic',
             created_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
@@ -100,7 +107,21 @@ def init_db() -> None:
         ON candidate_submissions (user_id, created_at DESC)
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analytics_counters (
+            key TEXT PRIMARY KEY,
+            value INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
     conn.commit()
+    # ensure engine column exists if база создана ранее
+    cursor.execute("PRAGMA table_info(candidate_submissions)")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+    if "engine" not in existing_columns:
+        cursor.execute("ALTER TABLE candidate_submissions ADD COLUMN engine TEXT DEFAULT 'heuristic'")
+        conn.commit()
     conn.close()
 
 
@@ -110,6 +131,22 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored_hash: str) -> bool:
     return hash_password(password) == stored_hash
+
+
+def admin_hash(password: str) -> str:
+    return hashlib.sha256(f"admin-salt:{password}".encode("utf-8")).hexdigest()
+
+
+def get_admin_password_hash() -> str:
+    if ADMIN_PASSWORD_HASH_ENV:
+        return ADMIN_PASSWORD_HASH_ENV
+    if ADMIN_PASSWORD_PLAIN:
+        return admin_hash(ADMIN_PASSWORD_PLAIN)
+    return admin_hash("hragent123")
+
+
+def verify_admin(password: str) -> bool:
+    return admin_hash(password) == get_admin_password_hash()
 
 
 def create_user(name: str, email: str, password: str, role: str, org_type: Optional[str]) -> int:
@@ -212,14 +249,15 @@ def save_candidate_submission(
     matched: List[str],
     missing: List[str],
     score: int,
+    engine: str,
 ) -> None:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """
         INSERT INTO candidate_submissions (
-            user_id, resume_excerpt, job_focus, matched_keywords, missing_keywords, score, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            user_id, resume_excerpt, job_focus, matched_keywords, missing_keywords, score, engine, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
@@ -228,6 +266,7 @@ def save_candidate_submission(
             ", ".join(matched) if matched else "",
             ", ".join(missing) if missing else "",
             score,
+            engine,
             datetime.utcnow().isoformat(),
         ),
     )
@@ -240,7 +279,7 @@ def get_candidate_history(user_id: int, limit: int = 5) -> List[Dict[str, Any]]:
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT resume_excerpt, job_focus, matched_keywords, missing_keywords, score, created_at
+        SELECT resume_excerpt, job_focus, matched_keywords, missing_keywords, score, engine, created_at
         FROM candidate_submissions
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -258,7 +297,7 @@ def search_candidate_submissions(keyword: Optional[str], name: Optional[str]) ->
     cursor = conn.cursor()
     query = """
         SELECT cs.resume_excerpt, cs.job_focus, cs.matched_keywords, cs.missing_keywords,
-               cs.score, cs.created_at, u.name AS user_name, u.email
+               cs.score, cs.engine, cs.created_at, u.name AS user_name, u.email
         FROM candidate_submissions cs
         JOIN users u ON cs.user_id = u.id
     """
@@ -281,6 +320,54 @@ def search_candidate_submissions(keyword: Optional[str], name: Optional[str]) ->
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def increment_counter(key: str, amount: int = 1) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO analytics_counters (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = value + ?
+        """,
+        (key, amount, amount),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_counter(key: str) -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM analytics_counters WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return int(row[0]) if row else 0
+
+
+def get_admin_stats() -> Dict[str, int]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total_users = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'candidate'")
+    total_candidates = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'hr'")
+    total_hr = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM candidate_submissions")
+    total_analyses = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM candidate_submissions WHERE engine = 'llm'")
+    llm_analyses = cursor.fetchone()[0]
+    conn.close()
+    return {
+        "visits": get_counter("visits"),
+        "total_users": total_users,
+        "total_candidates": total_candidates,
+        "total_hr": total_hr,
+        "total_analyses": total_analyses,
+        "llm_analyses": llm_analyses,
+    }
 
 
 def update_user_profile(
@@ -324,6 +411,8 @@ def extract_docx_text(data: bytes) -> str:
 
 
 def extract_pdf_text(data: bytes) -> str:
+    if pdf_extract_text is None:
+        return ""
     try:
         return pdf_extract_text(io.BytesIO(data)).strip()
     except Exception:
@@ -955,6 +1044,7 @@ CANDIDATE_TEMPLATE = """
                 <div class="history-item">
                     <strong>{{ item.score }}%</strong> · {{ item.created_at }}
                     <p style="color:#a8aecb;">{{ item.job_focus[:180] }}{% if item.job_focus|length > 180 %}...{% endif %}</p>
+                    <p class="hint">Источник анализа: {{ 'LLM' if item.engine == 'llm' else 'heuristic' }}</p>
                 </div>
                 {% endfor %}
             {% else %}
@@ -1044,6 +1134,7 @@ HR_TEMPLATE = """
                     {% if item.missing_keywords %}
                     <p class="muted">Нужно усилить: {{ item.missing_keywords }}</p>
                     {% endif %}
+                    <p class="muted">Источник: {{ 'LLM' if item.engine == 'llm' else 'heuristic' }}</p>
                     <p class="muted">Создано: {{ item.created_at }}</p>
                 </div>
                 {% endfor %}
@@ -1143,6 +1234,104 @@ PROFILE_TEMPLATE = """
 """
 
 
+ADMIN_LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Вход администратора — HR Agent</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #05060a; color: #f5f6fb; margin: 0; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+        .card { width: min(420px, 90%); background: rgba(17,20,37,0.95); border-radius: 24px; padding: 32px; border: 1px solid rgba(255,255,255,0.08); }
+        label { display:block; margin-bottom:6px; color:#a8aecb; }
+        input { width:100%; padding:14px; border-radius:14px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:#fff; }
+        form { display:grid; gap:18px; }
+        .btn { border:none; padding:12px 22px; border-radius:999px; background:linear-gradient(120deg,#6f6af8,#8f83ff); color:#fff; cursor:pointer; }
+        .error { color:#f87171; min-height:18px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1 style="margin-bottom:6px;">Admin панель</h1>
+        <p style="color:#a8aecb;margin-bottom:18px;">Войдите, чтобы посмотреть аналитику.</p>
+        <div class="error">{{ error or "" }}</div>
+        <form method="post">
+            <div>
+                <label for="username">Логин</label>
+                <input type="text" id="username" name="username" required />
+            </div>
+            <div>
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password" required />
+            </div>
+            <button class="btn" type="submit">Войти</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+
+ADMIN_DASH_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админ-аналитика — HR Agent</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #05060a; color: #f5f6fb; margin: 0; }
+        .page { max-width: 900px; margin: 0 auto; padding: 40px 20px 80px; }
+        .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+        .btn { border:none; padding:10px 18px; border-radius:999px; cursor:pointer; background:linear-gradient(120deg,#6f6af8,#8f83ff); color:#fff; text-decoration:none; }
+        .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:18px; }
+        .card { background:rgba(17,20,37,0.95); border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.08); }
+        .card span { display:block; color:#a8aecb; margin-bottom:6px; }
+        .card strong { font-size:2rem; }
+        a { color:#c5c8ff; text-decoration:none; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="top">
+            <h1>Админ-аналитика</h1>
+            <div>
+                <a class="btn" href="/">Главная</a>
+                <a class="btn" style="margin-left:8px;background:#2f3146;" href="/admin/logout">Выйти</a>
+            </div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <span>Всего посещений</span>
+                <strong>{{ stats.visits }}</strong>
+            </div>
+            <div class="card">
+                <span>Регистраций всего</span>
+                <strong>{{ stats.total_users }}</strong>
+            </div>
+            <div class="card">
+                <span>Кандидатов</span>
+                <strong>{{ stats.total_candidates }}</strong>
+            </div>
+            <div class="card">
+                <span>HR специалистов</span>
+                <strong>{{ stats.total_hr }}</strong>
+            </div>
+            <div class="card">
+                <span>Анализов профиля</span>
+                <strong>{{ stats.total_analyses }}</strong>
+            </div>
+            <div class="card">
+                <span>LLM-анализов</span>
+                <strong>{{ stats.llm_analyses }}</strong>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 env = Environment(loader=BaseLoader(), autoescape=True)
 templates = {
     "landing": env.from_string(LANDING_TEMPLATE),
@@ -1150,6 +1339,8 @@ templates = {
     "candidate": env.from_string(CANDIDATE_TEMPLATE),
     "hr": env.from_string(HR_TEMPLATE),
     "profile": env.from_string(PROFILE_TEMPLATE),
+    "admin_login": env.from_string(ADMIN_LOGIN_TEMPLATE),
+    "admin_dashboard": env.from_string(ADMIN_DASH_TEMPLATE),
 }
 
 
@@ -1215,6 +1406,7 @@ async def startup_event() -> None:
 @app.get("/", response_class=HTMLResponse)
 async def landing(request: Request) -> HTMLResponse:
     user = get_current_user(request)
+    increment_counter("visits")
     html = render_template("landing", **build_context(user))
     return HTMLResponse(content=html)
 
@@ -1383,6 +1575,46 @@ async def profile_update(request: Request) -> HTMLResponse:
     return HTMLResponse(content=html, status_code=400 if error else 200)
 
 
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_login_page(request: Request) -> HTMLResponse:
+    if request.session.get("admin_authenticated"):
+        return RedirectResponse("/admin/dashboard", status_code=HTTP_303_SEE_OTHER)
+    html = render_template("admin_login", error=None)
+    return HTMLResponse(content=html)
+
+
+@app.post("/admin", response_class=HTMLResponse)
+async def admin_login_submit(request: Request) -> HTMLResponse:
+    if request.session.get("admin_authenticated"):
+        return RedirectResponse("/admin/dashboard", status_code=HTTP_303_SEE_OTHER)
+    form = await request.form()
+    username = form.get("username", "").strip()
+    password = form.get("password", "")
+    error = None
+    if username != ADMIN_USERNAME or not verify_admin(password):
+        error = "Неверный логин или пароль."
+    if error:
+        html = render_template("admin_login", error=error)
+        return HTMLResponse(content=html, status_code=401)
+    request.session["admin_authenticated"] = True
+    return RedirectResponse("/admin/dashboard", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard_page(request: Request) -> HTMLResponse:
+    if not request.session.get("admin_authenticated"):
+        return RedirectResponse("/admin", status_code=HTTP_303_SEE_OTHER)
+    stats = get_admin_stats()
+    html = render_template("admin_dashboard", stats=stats)
+    return HTMLResponse(content=html)
+
+
+@app.get("/admin/logout")
+async def admin_logout(request: Request) -> RedirectResponse:
+    request.session.pop("admin_authenticated", None)
+    return RedirectResponse("/admin", status_code=HTTP_303_SEE_OTHER)
+
+
 @app.get("/candidate/dashboard", response_class=HTMLResponse)
 async def candidate_dashboard(request: Request) -> HTMLResponse:
     user = get_current_user(request)
@@ -1426,7 +1658,15 @@ async def candidate_analyze(request: Request) -> HTMLResponse:
         )
         return HTMLResponse(content=html, status_code=400)
     analysis = analyze_with_llm(resume_text, job_text) or simple_resume_analysis(resume_text, job_text)
-    save_candidate_submission(user["id"], resume_text, job_text, analysis["matched"], analysis["missing"], analysis["score"])
+    save_candidate_submission(
+        user["id"],
+        resume_text,
+        job_text,
+        analysis["matched"],
+        analysis["missing"],
+        analysis["score"],
+        analysis.get("engine", "heuristic"),
+    )
     history = get_candidate_history(user["id"])
     html = render_template(
         "candidate",
