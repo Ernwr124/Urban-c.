@@ -856,7 +856,7 @@ HR_TEMPLATE = """
                 </div>
                 <div>
                     <label for="name">Имя кандидата</label>
-                    <input type="text" id="name" name="name" value="{{ name }}" placeholder="Введите имя" />
+                    <input type="text" id="name" name="name" value="{{ search_name }}" placeholder="Введите имя" />
                 </div>
                 <button class="btn" type="submit" style="margin-top:10px;">Найти</button>
             </form>
@@ -1134,7 +1134,7 @@ async def hr_dashboard(request: Request, keyword: Optional[str] = None, name: Op
         user=user,
         results=results,
         keyword=keyword or "",
-        name=name or "",
+        search_name=name or "",
     )
     return HTMLResponse(content=html)
 
