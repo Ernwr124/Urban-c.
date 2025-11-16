@@ -60,6 +60,8 @@ class Config:
     def init(cls):
         """Initialize configuration"""
         cls.UPLOAD_DIR.mkdir(exist_ok=True)
+        (cls.UPLOAD_DIR / "avatars").mkdir(exist_ok=True)
+        (cls.UPLOAD_DIR / "resumes").mkdir(exist_ok=True)
 
 
 # ============================================================================
@@ -70,13 +72,30 @@ Base = declarative_base()
 
 
 class User(Base):
-    """User model"""
+    """User model - LinkedIn-style profile"""
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
+    
+    # Profile information
+    headline = Column(String, default="")  # e.g. "Senior Software Engineer at Company"
+    location = Column(String, default="")
+    bio = Column(Text, default="")
+    phone = Column(String, default="")
+    
+    # Profile media
+    avatar = Column(String, default="")  # Path to avatar image
+    resume_file = Column(String, default="")  # Path to uploaded resume
+    
+    # Social links
+    linkedin_url = Column(String, default="")
+    github_url = Column(String, default="")
+    website = Column(String, default="")
+    
+    # Meta
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime)
     is_active = Column(Boolean, default=True)
@@ -1106,38 +1125,375 @@ def dashboard_page(user: User, db: Session) -> str:
 
 
 def profile_page(user: User, db: Session) -> str:
-    """Profile page"""
+    """LinkedIn-style profile page"""
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
     
+    # Avatar display
+    avatar_url = f"/uploads/avatars/{user.avatar}" if user.avatar else ""
+    avatar_html = f'<img src="{avatar_url}" alt="Avatar" class="profile-avatar">' if user.avatar else '<div class="profile-avatar-placeholder">{user.full_name[0].upper()}</div>'
+    
+    # Resume download
+    resume_html = ""
+    if user.resume_file:
+        resume_html = f'<a href="/download-resume" class="btn btn-outline" style="padding: 8px 20px;">📄 Download Resume</a>'
+    
+    # Social links
+    social_links = ""
+    if user.linkedin_url:
+        social_links += f'<a href="{user.linkedin_url}" target="_blank" class="social-link">LinkedIn</a>'
+    if user.github_url:
+        social_links += f'<a href="{user.github_url}" target="_blank" class="social-link">GitHub</a>'
+    if user.website:
+        social_links += f'<a href="{user.website}" target="_blank" class="social-link">Website</a>'
+    
     content = f"""
-    <div class="container-sm">
-        <h1>Profile</h1>
-        <p class="text-muted" style="margin-bottom: 32px;">Your account information</p>
+    <div class="container">
+        <!-- Profile Header Card -->
+        <div class="profile-header-card">
+            <div class="profile-cover"></div>
+            <div class="profile-header-content">
+                <div class="profile-avatar-section">
+                    {avatar_html}
+                </div>
+                <div class="profile-header-info">
+                    <h1 style="font-size: 32px; margin-bottom: 8px;">{user.full_name}</h1>
+                    <p class="profile-headline">{user.headline or 'Add your headline'}</p>
+                    <p class="text-muted text-sm">{user.location or 'Add your location'} • {total_analyses} analyses</p>
+                    <div class="profile-actions">
+                        <a href="/edit-profile" class="btn btn-primary">Edit Profile</a>
+                        {resume_html}
+                    </div>
+                </div>
+            </div>
+        </div>
         
-        <div class="card">
-            <div class="section">
-                <div style="margin-bottom: 24px;">
-                    <div class="text-muted text-sm">FULL NAME</div>
-                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.full_name}</div>
+        <div class="grid-2" style="align-items: start;">
+            <!-- Left Column -->
+            <div>
+                <!-- About Section -->
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>About</h3>
+                        <a href="/edit-profile#about" class="btn btn-outline" style="padding: 6px 16px;">Edit</a>
+                    </div>
+                    <p class="text-muted">{user.bio or 'Tell us about yourself, your experience, and what makes you unique.'}</p>
                 </div>
-                <div style="margin-bottom: 24px;">
-                    <div class="text-muted text-sm">EMAIL</div>
-                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.email}</div>
+                
+                <!-- Contact Section -->
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">Contact Information</h3>
+                    <div class="contact-info">
+                        <div class="contact-item">
+                            <span class="contact-label">Email</span>
+                            <span class="contact-value">{user.email}</span>
+                        </div>
+                        {f'<div class="contact-item"><span class="contact-label">Phone</span><span class="contact-value">{user.phone}</span></div>' if user.phone else ''}
+                    </div>
                 </div>
-                <div style="margin-bottom: 24px;">
-                    <div class="text-muted text-sm">MEMBER SINCE</div>
-                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{user.created_at.strftime('%B %d, %Y')}</div>
+                
+                <!-- Social Links -->
+                {f'<div class="card"><h3 style="margin-bottom: 20px;">Social Links</h3><div style="display: flex; gap: 12px; flex-wrap: wrap;">{social_links}</div></div>' if social_links else ''}
+            </div>
+            
+            <!-- Right Column -->
+            <div>
+                <!-- Resume Section -->
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>Resume</h3>
+                        <a href="/upload-resume-profile" class="btn btn-outline" style="padding: 6px 16px;">Upload</a>
+                    </div>
+                    {f'<div class="resume-preview"><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="padding: 6px 16px; margin-top: 12px;">Download</a></div>' if user.resume_file else '<p class="text-muted">Upload your resume to use it for quick job matching</p>'}
                 </div>
-                <div>
-                    <div class="text-muted text-sm">TOTAL ANALYSES</div>
-                    <div style="font-weight: 600; margin-top: 8px; font-size: 18px;">{total_analyses}</div>
+                
+                <!-- Stats Section -->
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">Activity</h3>
+                    <div class="stat-item">
+                        <span class="stat-item-value">{total_analyses}</span>
+                        <span class="stat-item-label">Job Analyses</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-item-value">{user.created_at.strftime('%b %Y')}</span>
+                        <span class="stat-item-label">Member Since</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    
+    <style>
+    .profile-header-card {{
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 24px;
+    }}
+    
+    .profile-cover {{
+        height: 120px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    }}
+    
+    .profile-header-content {{
+        padding: 0 40px 32px;
+        position: relative;
+    }}
+    
+    .profile-avatar-section {{
+        margin-top: -60px;
+        margin-bottom: 16px;
+    }}
+    
+    .profile-avatar {{
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        border: 4px solid var(--black);
+        object-fit: cover;
+    }}
+    
+    .profile-avatar-placeholder {{
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        border: 4px solid var(--black);
+        background: var(--white);
+        color: var(--black);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        font-weight: 700;
+    }}
+    
+    .profile-headline {{
+        font-size: 18px;
+        margin-bottom: 8px;
+        color: rgba(255,255,255,0.9);
+    }}
+    
+    .profile-actions {{
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+    }}
+    
+    .contact-info {{
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }}
+    
+    .contact-item {{
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }}
+    
+    .contact-item:last-child {{
+        border-bottom: none;
+    }}
+    
+    .contact-label {{
+        color: rgba(255,255,255,0.6);
+        font-size: 14px;
+    }}
+    
+    .contact-value {{
+        font-weight: 500;
+    }}
+    
+    .social-link {{
+        padding: 8px 16px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--white);
+        font-size: 14px;
+        transition: all 0.2s;
+    }}
+    
+    .social-link:hover {{
+        background: rgba(255,255,255,0.1);
+        border-color: var(--white);
+    }}
+    
+    .resume-preview {{
+        background: rgba(255,255,255,0.05);
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }}
+    
+    .stat-item {{
+        display: flex;
+        justify-content: space-between;
+        padding: 16px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }}
+    
+    .stat-item:last-child {{
+        border-bottom: none;
+    }}
+    
+    .stat-item-value {{
+        font-size: 20px;
+        font-weight: 600;
+    }}
+    
+    .stat-item-label {{
+        color: rgba(255,255,255,0.6);
+        font-size: 14px;
+    }}
+    </style>
     """
     return get_base_html("Profile", content, user)
+
+
+def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
+    """Edit profile page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    success_html = f'<div class="alert alert-success">{success}</div>' if success else ""
+    
+    content = f"""
+    <div class="container-sm">
+        <div style="margin-bottom: 32px;">
+            <a href="/profile" class="btn btn-outline">← Back to Profile</a>
+        </div>
+        
+        <h1>Edit Profile</h1>
+        <p class="text-muted" style="margin-bottom: 32px;">Update your professional information</p>
+        
+        {error_html}
+        {success_html}
+        
+        <!-- Avatar Upload -->
+        <div class="card">
+            <h3 style="margin-bottom: 20px;">Profile Picture</h3>
+            <form method="POST" action="/upload-avatar" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 24px;">
+                <div>
+                    {f'<img src="/uploads/avatars/{user.avatar}" alt="Avatar" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">' if user.avatar else f'<div style="width: 100px; height: 100px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700;">{user.full_name[0].upper()}</div>'}
+                </div>
+                <div style="flex: 1;">
+                    <input type="file" name="avatar" accept="image/*" class="form-control" style="margin-bottom: 12px;">
+                    <button type="submit" class="btn btn-primary">Upload Photo</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Basic Information -->
+        <form method="POST" action="/update-profile">
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Basic Information</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" name="full_name" class="form-control" value="{user.full_name}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Headline</label>
+                    <input type="text" name="headline" class="form-control" value="{user.headline or ''}" placeholder="e.g. Senior Software Engineer at Tech Company">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Location</label>
+                    <input type="text" name="location" class="form-control" value="{user.location or ''}" placeholder="e.g. San Francisco, CA">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">About</label>
+                    <textarea name="bio" class="form-control" placeholder="Tell us about yourself, your experience, and what makes you unique...">{user.bio or ''}</textarea>
+                </div>
+            </div>
+            
+            <!-- Contact Information -->
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Contact Information</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" value="{user.email}" disabled style="opacity: 0.6;">
+                    <p class="text-muted text-xs" style="margin-top: 4px;">Email cannot be changed</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" name="phone" class="form-control" value="{user.phone or ''}" placeholder="+1 (555) 123-4567">
+                </div>
+            </div>
+            
+            <!-- Social Links -->
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Social Links</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">LinkedIn Profile</label>
+                    <input type="url" name="linkedin_url" class="form-control" value="{user.linkedin_url or ''}" placeholder="https://linkedin.com/in/yourprofile">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">GitHub Profile</label>
+                    <input type="url" name="github_url" class="form-control" value="{user.github_url or ''}" placeholder="https://github.com/yourusername">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Personal Website</label>
+                    <input type="url" name="website" class="form-control" value="{user.website or ''}" placeholder="https://yourwebsite.com">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block btn-large">Save Changes</button>
+        </form>
+    </div>
+    """
+    return get_base_html("Edit Profile", content, user)
+
+
+def upload_resume_profile_page(user: User, error: str = "") -> str:
+    """Upload resume to profile page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    
+    content = f"""
+    <div class="container-sm">
+        <div style="margin-bottom: 32px;">
+            <a href="/profile" class="btn btn-outline">← Back to Profile</a>
+        </div>
+        
+        <h1>Upload Resume</h1>
+        <p class="text-muted" style="margin-bottom: 32px;">Upload your resume to your profile for quick job matching</p>
+        
+        {error_html}
+        
+        <div class="card">
+            <form method="POST" action="/upload-resume-profile" enctype="multipart/form-data">
+                <div class="file-upload" onclick="document.getElementById('resume-input').click();">
+                    <div class="file-icon">📄</div>
+                    <input type="file" id="resume-input" name="resume" accept=".pdf,.docx,.doc" required onchange="updateResumeFileName(this)">
+                    <p id="resume-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Click to upload your resume</p>
+                    <p class="text-muted text-xs">PDF or DOCX, max 10MB</p>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block btn-large" style="margin-top: 24px;">Upload Resume</button>
+            </form>
+        </div>
+        
+        {f'<div class="card"><h3>Current Resume</h3><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="margin-top: 12px;">Download Current Resume</a></div>' if user.resume_file else ''}
+    </div>
+    
+    <script>
+    function updateResumeFileName(input) {{
+        const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Click to upload your resume';
+        document.getElementById('resume-name').textContent = fileName;
+    }}
+    </script>
+    """
+    return get_base_html("Upload Resume", content, user)
 
 
 def analyze_page(user: User, error: str = "") -> str:
@@ -1464,6 +1820,136 @@ async def profile(
 ):
     """Profile page"""
     return profile_page(user, db)
+
+
+@app.get("/edit-profile", response_class=HTMLResponse)
+async def edit_profile_get(user: User = Depends(require_auth)):
+    """Edit profile page"""
+    return edit_profile_page(user)
+
+
+@app.post("/update-profile")
+async def update_profile(
+    full_name: str = Form(...),
+    headline: str = Form(""),
+    location: str = Form(""),
+    bio: str = Form(""),
+    phone: str = Form(""),
+    linkedin_url: str = Form(""),
+    github_url: str = Form(""),
+    website: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Update profile information"""
+    user.full_name = full_name
+    user.headline = headline
+    user.location = location
+    user.bio = bio
+    user.phone = phone
+    user.linkedin_url = linkedin_url
+    user.github_url = github_url
+    user.website = website
+    
+    db.commit()
+    
+    return RedirectResponse(url="/profile", status_code=302)
+
+
+@app.post("/upload-avatar")
+async def upload_avatar(
+    avatar: UploadFile = File(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Upload profile avatar"""
+    
+    # Validate file type
+    if not avatar.content_type.startswith("image/"):
+        return HTMLResponse(edit_profile_page(user, error="Please upload an image file"))
+    
+    # Validate file size
+    file_content = await avatar.read()
+    if len(file_content) > 5 * 1024 * 1024:  # 5MB
+        return HTMLResponse(edit_profile_page(user, error="Image too large (max 5MB)"))
+    
+    # Save file
+    file_ext = avatar.filename.split(".")[-1] if "." in avatar.filename else "jpg"
+    filename = f"{user.id}_{datetime.utcnow().timestamp()}.{file_ext}"
+    file_path = Config.UPLOAD_DIR / "avatars" / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    
+    # Update user
+    user.avatar = filename
+    db.commit()
+    
+    return RedirectResponse(url="/edit-profile", status_code=302)
+
+
+@app.get("/upload-resume-profile", response_class=HTMLResponse)
+async def upload_resume_profile_get(user: User = Depends(require_auth)):
+    """Upload resume to profile page"""
+    return upload_resume_profile_page(user)
+
+
+@app.post("/upload-resume-profile")
+async def upload_resume_profile_post(
+    resume: UploadFile = File(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Handle resume upload to profile"""
+    
+    # Validate file type
+    if not (resume.filename.endswith(".pdf") or resume.filename.endswith(".docx") or resume.filename.endswith(".doc")):
+        return HTMLResponse(upload_resume_profile_page(user, error="Only PDF and DOCX files are supported"))
+    
+    # Validate file size
+    file_content = await resume.read()
+    if len(file_content) > Config.MAX_FILE_SIZE:
+        return HTMLResponse(upload_resume_profile_page(user, error="File too large (max 10MB)"))
+    
+    # Save file
+    filename = f"{user.id}_resume_{datetime.utcnow().timestamp()}_{resume.filename}"
+    file_path = Config.UPLOAD_DIR / "resumes" / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    
+    # Update user
+    user.resume_file = filename
+    db.commit()
+    
+    return RedirectResponse(url="/profile", status_code=302)
+
+
+@app.get("/download-resume")
+async def download_resume(user: User = Depends(require_auth)):
+    """Download user's resume"""
+    if not user.resume_file:
+        raise HTTPException(status_code=404, detail="No resume uploaded")
+    
+    file_path = Config.UPLOAD_DIR / "resumes" / user.resume_file
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Resume file not found")
+    
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path, filename=user.resume_file.split("_", 3)[-1] if "_" in user.resume_file else user.resume_file)
+
+
+@app.get("/uploads/{folder}/{filename}")
+async def serve_upload(folder: str, filename: str):
+    """Serve uploaded files"""
+    file_path = Config.UPLOAD_DIR / folder / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path)
 
 
 @app.get("/analyze", response_class=HTMLResponse)
