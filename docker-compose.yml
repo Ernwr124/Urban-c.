@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  hr_platform:
+    build: .
+    container_name: hr_platform
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-default-secret-key-change-in-production}
+      - OLLAMA_API_URL=${OLLAMA_API_URL:-https://api.ollama.cloud/v1/chat/completions}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./hr_platform.db:/app/hr_platform.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

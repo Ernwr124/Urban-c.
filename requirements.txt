@@ -1,8 +1,24 @@
-flask
-flask_sqlalchemy
-flask_login
-werkzeug
-qrcode
-pillow
-reportlab
-apscheduler
+# FastAPI and Server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+
+# HTTP Client
+httpx==0.25.2
+
+# Data Validation
+pydantic==2.5.0
+pydantic[email]==2.5.0
+
+# File Parsing (Optional but recommended)
+PyPDF2==3.0.1
+python-docx==1.1.0
+Pillow==10.1.0
+pytesseract==0.3.10
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
