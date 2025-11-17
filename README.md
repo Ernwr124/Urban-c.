@@ -2,8 +2,14 @@
 
 AI-powered job match analysis platform. Upload your resume, paste a job description, and get instant AI feedback on how well you match.
 
+**🌐 Multilingual Support**: Full support for **English**, **Russian (Русский)**, and **Kazakh (Қазақша)**! See [MULTILINGUAL_SETUP.md](./MULTILINGUAL_SETUP.md) for details.
+
 ## ✨ Features
 
+- **🌐 Multilingual Interface** - Switch between English, Russian, and Kazakh
+  - Full UI translation
+  - AI analysis in your preferred language
+  - Easy language switching from navigation bar
 - **Resume Upload** - PDF and DOCX support
 - **Job Description Input** - Paste complete job posting
 - **AI Analysis** - Powered by Ollama (gpt-oss:20b-cloud)
@@ -13,6 +19,26 @@ AI-powered job match analysis platform. Upload your resume, paste a job descript
 - **Experience & Education Match** - Progress bars with scores
 - **Recommendations** - Actionable advice to improve
 - **Minimalist Design** - Pure black & white interface
+- **Profile Management** - LinkedIn-style profiles with skills
+- **Skill-based Matching** - Add your skills for more accurate analysis
+
+## 🌍 Language Support
+
+HR Agent is available in three languages:
+
+| Language | Native Name | AI Analysis | UI Translation |
+|----------|-------------|-------------|----------------|
+| English  | English     | ✅          | ✅             |
+| Russian  | Русский     | ✅          | ✅             |
+| Kazakh   | Қазақша     | ✅          | ✅             |
+
+**How to change language:**
+1. Log in to your account
+2. Click on the language selector in the navigation bar (e.g., "English ▾")
+3. Select your preferred language
+4. All pages and AI results will be in your language!
+
+See [MULTILINGUAL_SETUP.md](./MULTILINGUAL_SETUP.md) for detailed documentation.
 
 ## 🎨 Design
 
@@ -47,6 +73,8 @@ ollama serve
 
 The platform will connect to Ollama at: `http://localhost:11434`
 
+For detailed Ollama setup, see [OLLAMA_SETUP.md](./OLLAMA_SETUP.md)
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -63,13 +91,23 @@ python hr_platform.py
 
 Open: **http://localhost:8000**
 
+### First Time Setup
+
+**IMPORTANT:** If you're upgrading from an older version, delete the old database to apply the new schema with language support:
+
+```bash
+rm hr_agent.db
+python hr_platform.py
+```
+
 ## 📋 How to Use
 
 1. **Create Account** - Sign up with email and password
-2. **Go to Analyze** - Click "New Analysis" button
-3. **Upload Resume** - PDF or DOCX file
-4. **Paste Job Description** - Full job posting with requirements
-5. **Get Results** - Instant AI-powered analysis
+2. **Set Up Profile** - Add your skills for accurate matching
+3. **Go to Analyze** - Click "New Analysis" button
+4. **Upload Resume** - PDF or DOCX file
+5. **Paste Job Description** - Full job posting with requirements
+6. **Get Results** - Instant AI-powered analysis in your language
 
 ## 📊 Results Include
 
@@ -109,6 +147,7 @@ Open: **http://localhost:8000**
 - **AI**: Ollama (gpt-oss:20b-cloud)
 - **Frontend**: Pure HTML/CSS
 - **Style**: Minimalist black & white
+- **i18n**: Built-in translation system
 
 ## 📄 Supported Formats
 
@@ -131,7 +170,7 @@ export OLLAMA_API_URL="http://your-ollama-server:11434/api/generate"
 SQLite database: `hr_agent.db`
 
 Tables:
-- `users` - User accounts
+- `users` - User accounts (with language preference)
 - `analyses` - Job match analyses with results
 - `sessions` - Authentication sessions
 
@@ -146,18 +185,10 @@ Tables:
 - **Landing** - Hero section with features
 - **Sign In/Up** - Authentication
 - **Dashboard** - Statistics and history
+- **Profile** - LinkedIn-style profile with skills
+- **Edit Profile** - Update personal info and skills
 - **Analyze** - Upload and analyze
 - **Results** - Detailed match analysis
-- **Profile** - Account information
-
-## 🎨 Design Features
-
-- Minimalist black background
-- White buttons with hover effects
-- Smooth animations and transitions
-- Responsive grid layouts
-- Clean typography (Inter font)
-- Color accents only for data visualization
 
 ## 💡 Tips
 
@@ -174,6 +205,12 @@ Tables:
 - Include requirements section
 - Include responsibilities
 - Don't edit or summarize
+
+**Profile Skills:**
+- Add your real skills to profile
+- Use them for accurate matching
+- AI will only match confirmed skills
+- Reduces false positives
 
 ### If Ollama Not Working
 
@@ -253,6 +290,13 @@ ollama serve
 ollama pull gpt-oss:20b-cloud
 ```
 
+### Database schema errors
+If you encounter database errors after updating:
+```bash
+rm hr_agent.db
+python hr_platform.py
+```
+
 ## 📈 Example Workflow
 
 1. Find job posting you're interested in
@@ -264,6 +308,12 @@ ollama pull gpt-oss:20b-cloud
 7. Update resume based on feedback
 8. Re-analyze to see improvement
 
+## 🌍 Translations
+
+Want to improve translations or add a new language? Contributions welcome!
+
+See [MULTILINGUAL_SETUP.md](./MULTILINGUAL_SETUP.md) for translation guidelines.
+
 ## 🤝 Contributing
 
 Single-file application for easy deployment and customization.
@@ -274,5 +324,6 @@ See LICENSE file
 
 ---
 
-**HR Agent** - AI-Powered Job Matching
-Version 1.0.0
+**HR Agent** - AI-Powered Job Matching  
+Available in English, Русский, Қазақша  
+Version 2.0.0 (Multilingual Edition)

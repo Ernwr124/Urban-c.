@@ -93,6 +93,9 @@ class User(Base):
     # Skills (manually entered for accurate matching)
     skills = Column(Text, default="")  # Comma-separated or structured text
     
+    # Language preference
+    language = Column(String, default="en")  # 'en', 'ru', 'kk'
+    
     # Social links
     linkedin_url = Column(String, default="")
     github_url = Column(String, default="")
@@ -209,8 +212,17 @@ def parse_resume(filename: str, file_content: bytes) -> str:
         return "[Unsupported file format]"
 
 
-async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "") -> Dict[str, Any]:
+async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "", language: str = "en") -> Dict[str, Any]:
     """Compare resume with job description using Ollama"""
+    
+    # Language instructions
+    language_instructions = {
+        "en": "Respond in English. Provide all analysis and recommendations in English.",
+        "ru": "Отвечай на русском языке. Все тексты, анализ, рекомендации и оценки должны быть СТРОГО на русском языке.",
+        "kk": "Қазақ тілінде жауап беріңіз. Барлық мәтіндер, талдау, ұсыныстар және бағалар ТІКЕЛЕЙ қазақ тілінде болуы керек."
+    }
+    
+    lang_instruction = language_instructions.get(language, language_instructions["en"])
     
     skills_section = ""
     if candidate_skills:
@@ -224,7 +236,9 @@ Use these as the PRIMARY SOURCE when evaluating skills match.
 Only mark skills as "matched" if they appear in this confirmed skills list.
 If a skill is in the resume but NOT in the confirmed skills list, be cautious."""
     
-    prompt = f"""Compare this resume with the job description and provide detailed analysis in JSON format.
+    prompt = f"""{lang_instruction}
+
+Compare this resume with the job description and provide detailed analysis in JSON format.
 
 RESUME:
 {resume_text}
@@ -338,6 +352,456 @@ def create_fallback_comparison(resume_text: str, job_description: str) -> Dict[s
 
 
 # ============================================================================
+# TRANSLATIONS
+# ============================================================================
+
+TRANSLATIONS = {
+    "en": {
+        # Navigation
+        "app_name": "HR Agent",
+        "dashboard": "Dashboard",
+        "analyze": "Analyze",
+        "profile": "Profile",
+        "edit_profile": "Edit Profile",
+        "sign_in": "Sign in",
+        "sign_out": "Sign out",
+        "sign_up": "Sign up",
+        "get_started": "Get Started",
+        
+        # Landing page
+        "hero_title": "Match Your Resume<br>with Your Dream Job",
+        "hero_subtitle": "AI-powered analysis that compares your resume with job descriptions. Get instant feedback on how well you match the position.",
+        "match_percentage": "Match Percentage",
+        "match_percentage_desc": "See exactly how well your resume aligns with job requirements. Clear percentage score with detailed breakdown.",
+        "pros_cons": "Pros & Cons",
+        "pros_cons_desc": "Discover your strengths for the position and areas where you need improvement. Honest, actionable feedback.",
+        "skills_analysis": "Skills Analysis",
+        "skills_analysis_desc": "Identify matched skills, missing requirements, and additional qualifications you bring to the table.",
+        "recommendations": "Smart Recommendations",
+        "recommendations_desc": "Get specific advice on improving your match score. Powered by Ollama AI (gpt-oss:20b-cloud).",
+        
+        # Auth
+        "welcome_back": "Welcome back",
+        "sign_in_subtitle": "Sign in to your HR Agent account",
+        "email": "Email",
+        "password": "Password",
+        "create_account": "Create account",
+        "create_account_subtitle": "Get started with HR Agent",
+        "full_name": "Full Name",
+        "already_have_account": "Already have an account?",
+        "dont_have_account": "Don't have an account?",
+        "create_one": "Create one",
+        
+        # Dashboard
+        "welcome_back_user": "Welcome back",
+        "total_analyses": "Total Analyses",
+        "average_match": "Average Match",
+        "latest_score": "Latest Score",
+        "recent_analyses": "Recent Analyses",
+        "new_analysis": "New Analysis",
+        "analyses": "Analyses",
+        "avg_match": "Avg Match",
+        "latest": "Latest",
+        "no_analyses": "No analyses yet.",
+        "create_first": "Create your first one",
+        
+        # Profile
+        "about": "About",
+        "contact_information": "Contact Information",
+        "social_links": "Social Links",
+        "skills": "Skills",
+        "resume": "Resume",
+        "activity": "Activity",
+        "job_analyses": "Job Analyses",
+        "member_since": "Member Since",
+        "add_skills": "Add your skills for more accurate job matching.",
+        "add_skills_link": "Add skills",
+        "upload": "Upload",
+        "download": "Download",
+        "download_resume": "Download Resume",
+        "edit": "Edit",
+        
+        # Edit Profile
+        "update_info": "Update your professional information",
+        "back_to_profile": "← Back to Profile",
+        "profile_picture": "Profile Picture",
+        "upload_photo": "Upload Photo",
+        "basic_information": "Basic Information",
+        "headline": "Headline",
+        "headline_placeholder": "e.g. Senior Software Engineer at Tech Company",
+        "location": "Location",
+        "location_placeholder": "e.g. San Francisco, CA",
+        "about_placeholder": "Tell us about yourself, your experience, and what makes you unique...",
+        "email_cannot_change": "Email cannot be changed",
+        "phone": "Phone",
+        "linkedin_profile": "LinkedIn Profile",
+        "github_profile": "GitHub Profile",
+        "personal_website": "Personal Website",
+        "save_changes": "Save Changes",
+        "your_skills": "Your Skills",
+        "skills_placeholder": "Enter your skills (one per line or comma-separated)",
+        "skills_note": "💡 These skills will be used for accurate job matching. Only add skills you truly possess.",
+        "be_honest": "Add your actual skills for more accurate job matching. Be honest!",
+        
+        # Analyze
+        "analyze_match": "Analyze Match",
+        "analyze_subtitle": "Upload your resume and paste the job description",
+        "upload_resume": "1. Upload Resume",
+        "job_description": "2. Job Description",
+        "pdf_or_docx": "PDF or DOCX format, max 10MB",
+        "paste_job_desc": "Paste the complete job posting including all requirements",
+        "click_to_upload": "Click to upload resume",
+        "supported_formats": "Supported: PDF, DOCX",
+        "use_profile_skills": "💡 Use Your Profile Skills",
+        "use_profile_skills_desc": "You have {count} skills in your profile. Use them for more accurate matching!",
+        "use_my_skills": "Use my profile skills for accurate matching",
+        "use_my_skills_desc": "AI will only match skills you've confirmed in your profile",
+        "add_them_now": "Add them now",
+        
+        # Results
+        "excellent_match": "Excellent Match",
+        "good_match": "Good Match",
+        "needs_work": "Needs Work",
+        "strengths": "Strengths",
+        "areas_to_address": "Areas to Address",
+        "what_makes_fit": "What makes you a great fit",
+        "requirements_to_strengthen": "Requirements to strengthen",
+        "matched_skills": "MATCHED SKILLS",
+        "missing_skills": "MISSING SKILLS",
+        "additional_skills": "ADDITIONAL SKILLS YOU BRING",
+        "experience_match": "Experience Match",
+        "education_match": "Education Match",
+        "recommendations_title": "Recommendations",
+        "actions_to_improve": "Actions to improve your match",
+        "analyze_another": "Analyze Another Position",
+        
+        # Upload Resume
+        "upload_resume_title": "Upload Resume",
+        "upload_resume_subtitle": "Upload your resume to your profile for quick job matching",
+        "current_resume": "Current Resume",
+        "resume_uploaded": "✅ Resume uploaded successfully!",
+        "add_your_skills": "Add Your Skills",
+        "add_skills_subtitle": "Help us match you accurately by listing your real skills. This makes job matching more precise!",
+        "why_add_skills": "Why add skills?",
+        "accurate_matching": "✓ More accurate job matching",
+        "ai_knows": "✓ AI will know exactly what you can do",
+        "better_results": "✓ Better analysis results",
+        "avoid_false": "✓ Avoid false positives",
+        "save_skills": "Save Skills",
+        "skip_now": "Skip for Now",
+        
+        # Common
+        "back_to_dashboard": "← Back to Dashboard",
+        "view": "View",
+        "view_details": "View Details",
+        "file_too_large": "File too large (max 10MB)",
+        "unsupported_format": "Only PDF and DOCX files are supported",
+        "error_upload": "Please upload an image file",
+        "image_too_large": "Image too large (max 5MB)",
+    },
+    
+    "ru": {
+        # Навигация
+        "app_name": "HR Agent",
+        "dashboard": "Панель",
+        "analyze": "Анализ",
+        "profile": "Профиль",
+        "edit_profile": "Редактировать",
+        "sign_in": "Войти",
+        "sign_out": "Выйти",
+        "sign_up": "Регистрация",
+        "get_started": "Начать",
+        
+        # Главная
+        "hero_title": "Сравните резюме<br>с работой мечты",
+        "hero_subtitle": "ИИ-анализ сравнивает ваше резюме с описанием вакансии. Мгновенная обратная связь о том, насколько вы подходите.",
+        "match_percentage": "Процент соответствия",
+        "match_percentage_desc": "Узнайте точно, насколько ваше резюме соответствует требованиям. Четкая оценка с детальной разбивкой.",
+        "pros_cons": "Плюсы и минусы",
+        "pros_cons_desc": "Узнайте ваши сильные стороны для позиции и области для улучшения. Честная и практичная обратная связь.",
+        "skills_analysis": "Анализ навыков",
+        "skills_analysis_desc": "Определите совпадающие навыки, недостающие требования и дополнительную квалификацию.",
+        "recommendations": "Умные рекомендации",
+        "recommendations_desc": "Получите конкретные советы по улучшению соответствия. Работает на Ollama AI (gpt-oss:20b-cloud).",
+        
+        # Авторизация
+        "welcome_back": "С возвращением",
+        "sign_in_subtitle": "Войдите в свой аккаунт HR Agent",
+        "email": "Email",
+        "password": "Пароль",
+        "create_account": "Создать аккаунт",
+        "create_account_subtitle": "Начните работу с HR Agent",
+        "full_name": "Полное имя",
+        "already_have_account": "Уже есть аккаунт?",
+        "dont_have_account": "Нет аккаунта?",
+        "create_one": "Создать",
+        
+        # Панель
+        "welcome_back_user": "С возвращением",
+        "total_analyses": "Всего анализов",
+        "average_match": "Средний процент",
+        "latest_score": "Последний",
+        "recent_analyses": "Последние анализы",
+        "new_analysis": "Новый анализ",
+        "analyses": "Анализы",
+        "avg_match": "Средний",
+        "latest": "Последний",
+        "no_analyses": "Пока нет анализов.",
+        "create_first": "Создайте первый",
+        
+        # Профиль
+        "about": "О себе",
+        "contact_information": "Контактная информация",
+        "social_links": "Социальные сети",
+        "skills": "Навыки",
+        "resume": "Резюме",
+        "activity": "Активность",
+        "job_analyses": "Анализы вакансий",
+        "member_since": "Участник с",
+        "add_skills": "Добавьте навыки для более точного подбора.",
+        "add_skills_link": "Добавить навыки",
+        "upload": "Загрузить",
+        "download": "Скачать",
+        "download_resume": "Скачать резюме",
+        "edit": "Изменить",
+        
+        # Редактирование
+        "update_info": "Обновите вашу профессиональную информацию",
+        "back_to_profile": "← Назад к профилю",
+        "profile_picture": "Фото профиля",
+        "upload_photo": "Загрузить фото",
+        "basic_information": "Основная информация",
+        "headline": "Заголовок",
+        "headline_placeholder": "Например: Senior Software Engineer в Tech Company",
+        "location": "Местоположение",
+        "location_placeholder": "Например: Алматы, Казахстан",
+        "about_placeholder": "Расскажите о себе, своем опыте и что делает вас уникальным...",
+        "email_cannot_change": "Email нельзя изменить",
+        "phone": "Телефон",
+        "linkedin_profile": "Профиль LinkedIn",
+        "github_profile": "Профиль GitHub",
+        "personal_website": "Личный сайт",
+        "save_changes": "Сохранить изменения",
+        "your_skills": "Ваши навыки",
+        "skills_placeholder": "Введите навыки (по одному в строке или через запятую)",
+        "skills_note": "💡 Эти навыки будут использованы для точного подбора. Добавляйте только реальные навыки.",
+        "be_honest": "Добавьте реальные навыки для точного подбора. Будьте честны!",
+        
+        # Анализ
+        "analyze_match": "Анализ соответствия",
+        "analyze_subtitle": "Загрузите резюме и вставьте описание вакансии",
+        "upload_resume": "1. Загрузите резюме",
+        "job_description": "2. Описание вакансии",
+        "pdf_or_docx": "PDF или DOCX, макс 10MB",
+        "paste_job_desc": "Вставьте полное описание вакансии со всеми требованиями",
+        "click_to_upload": "Нажмите для загрузки резюме",
+        "supported_formats": "Поддерживается: PDF, DOCX",
+        "use_profile_skills": "💡 Используйте навыки из профиля",
+        "use_profile_skills_desc": "У вас {count} навыков в профиле. Используйте их для точного подбора!",
+        "use_my_skills": "Использовать навыки из профиля",
+        "use_my_skills_desc": "ИИ будет сопоставлять только подтвержденные навыки",
+        "add_them_now": "Добавить сейчас",
+        
+        # Результаты
+        "excellent_match": "Отличное соответствие",
+        "good_match": "Хорошее соответствие",
+        "needs_work": "Требуется работа",
+        "strengths": "Сильные стороны",
+        "areas_to_address": "Области для улучшения",
+        "what_makes_fit": "Что делает вас подходящим",
+        "requirements_to_strengthen": "Требования для усиления",
+        "matched_skills": "СОВПАДАЮЩИЕ НАВЫКИ",
+        "missing_skills": "НЕДОСТАЮЩИЕ НАВЫКИ",
+        "additional_skills": "ДОПОЛНИТЕЛЬНЫЕ НАВЫКИ",
+        "experience_match": "Соответствие опыта",
+        "education_match": "Соответствие образования",
+        "recommendations_title": "Рекомендации",
+        "actions_to_improve": "Действия для улучшения соответствия",
+        "analyze_another": "Анализировать другую позицию",
+        
+        # Загрузка резюме
+        "upload_resume_title": "Загрузить резюме",
+        "upload_resume_subtitle": "Загрузите резюме в профиль для быстрого подбора",
+        "current_resume": "Текущее резюме",
+        "resume_uploaded": "✅ Резюме успешно загружено!",
+        "add_your_skills": "Добавьте навыки",
+        "add_skills_subtitle": "Укажите реальные навыки для точного подбора. Это делает анализ более точным!",
+        "why_add_skills": "Зачем добавлять навыки?",
+        "accurate_matching": "✓ Более точный подбор",
+        "ai_knows": "✓ ИИ будет точно знать, что вы умеете",
+        "better_results": "✓ Лучшие результаты анализа",
+        "avoid_false": "✓ Избежание ложных совпадений",
+        "save_skills": "Сохранить навыки",
+        "skip_now": "Пропустить",
+        
+        # Общее
+        "back_to_dashboard": "← Назад к панели",
+        "view": "Просмотр",
+        "view_details": "Подробнее",
+        "file_too_large": "Файл слишком большой (макс 10MB)",
+        "unsupported_format": "Поддерживаются только PDF и DOCX файлы",
+        "error_upload": "Загрузите файл изображения",
+        "image_too_large": "Изображение слишком большое (макс 5MB)",
+    },
+    
+    "kk": {
+        # Навигация
+        "app_name": "HR Agent",
+        "dashboard": "Басты бет",
+        "analyze": "Талдау",
+        "profile": "Профиль",
+        "edit_profile": "Өзгерту",
+        "sign_in": "Кіру",
+        "sign_out": "Шығу",
+        "sign_up": "Тіркелу",
+        "get_started": "Бастау",
+        
+        # Басты бет
+        "hero_title": "Резюмені<br>арман жұмысымен салыстырыңыз",
+        "hero_subtitle": "AI талдауы резюмеңізді жұмыс сипаттамасымен салыстырады. Позицияға қаншалықты сәйкес келетініңізді бірден біліңіз.",
+        "match_percentage": "Сәйкестік пайызы",
+        "match_percentage_desc": "Резюмеңіздің талаптарға қаншалықты сәйкес келетінін нақты біліңіз. Анық баға мен толық талдау.",
+        "pros_cons": "Артықшылықтар мен кемшіліктер",
+        "pros_cons_desc": "Позиция үшін күшті жақтарыңызды және жақсарту салаларын біліңіз. Шынайы және практикалық кері байланыс.",
+        "skills_analysis": "Дағдылар талдауы",
+        "skills_analysis_desc": "Сәйкес келетін дағдыларды, жетіспейтін талаптарды және қосымша біліктілікті анықтаңыз.",
+        "recommendations": "Ақылды ұсыныстар",
+        "recommendations_desc": "Сәйкестікті жақсарту бойынша нақты кеңестер алыңыз. Ollama AI негізінде (gpt-oss:20b-cloud).",
+        
+        # Авторизация
+        "welcome_back": "Қош келдіңіз",
+        "sign_in_subtitle": "HR Agent аккаунтыңызға кіріңіз",
+        "email": "Email",
+        "password": "Құпия сөз",
+        "create_account": "Аккаунт құру",
+        "create_account_subtitle": "HR Agent-пен жұмысты бастаңыз",
+        "full_name": "Толық аты-жөні",
+        "already_have_account": "Аккаунт бар ма?",
+        "dont_have_account": "Аккаунт жоқ па?",
+        "create_one": "Құру",
+        
+        # Басты бет
+        "welcome_back_user": "Қош келдіңіз",
+        "total_analyses": "Барлық талдаулар",
+        "average_match": "Орташа пайыз",
+        "latest_score": "Соңғы",
+        "recent_analyses": "Соңғы талдаулар",
+        "new_analysis": "Жаңа талдау",
+        "analyses": "Талдаулар",
+        "avg_match": "Орташа",
+        "latest": "Соңғы",
+        "no_analyses": "Әлі талдау жоқ.",
+        "create_first": "Бірінші жасаңыз",
+        
+        # Профиль
+        "about": "Өзім туралы",
+        "contact_information": "Байланыс ақпараты",
+        "social_links": "Әлеуметтік желілер",
+        "skills": "Дағдылар",
+        "resume": "Резюме",
+        "activity": "Белсенділік",
+        "job_analyses": "Жұмыс талдаулары",
+        "member_since": "Мүше болған уақыт",
+        "add_skills": "Дәлірек іріктеу үшін дағдыларды қосыңыз.",
+        "add_skills_link": "Дағдылар қосу",
+        "upload": "Жүктеу",
+        "download": "Жүктеп алу",
+        "download_resume": "Резюмені жүктеп алу",
+        "edit": "Өзгерту",
+        
+        # Өңдеу
+        "update_info": "Кәсіби ақпаратты жаңартыңыз",
+        "back_to_profile": "← Профильге оралу",
+        "profile_picture": "Профиль суреті",
+        "upload_photo": "Сурет жүктеу",
+        "basic_information": "Негізгі ақпарат",
+        "headline": "Тақырып",
+        "headline_placeholder": "Мысалы: Senior Software Engineer Tech Company-де",
+        "location": "Орналасқан жер",
+        "location_placeholder": "Мысалы: Алматы, Қазақстан",
+        "about_placeholder": "Өзіңіз туралы, тәжірибеңіз және сізді бірегей ететін нәрсе туралы айтыңыз...",
+        "email_cannot_change": "Email-ді өзгерту мүмкін емес",
+        "phone": "Телефон",
+        "linkedin_profile": "LinkedIn профилі",
+        "github_profile": "GitHub профилі",
+        "personal_website": "Жеке сайт",
+        "save_changes": "Өзгерістерді сақтау",
+        "your_skills": "Сіздің дағдыларыңыз",
+        "skills_placeholder": "Дағдыларды енгізіңіз (әр жолдан немесе үтір арқылы)",
+        "skills_note": "💡 Бұл дағдылар дәл іріктеу үшін қолданылады. Тек нақты дағдыларды қосыңыз.",
+        "be_honest": "Дәл іріктеу үшін нақты дағдыларды қосыңыз. Шынайы болыңыз!",
+        
+        # Талдау
+        "analyze_match": "Сәйкестік талдауы",
+        "analyze_subtitle": "Резюмені жүктеп, жұмыс сипаттамасын қойыңыз",
+        "upload_resume": "1. Резюмені жүктеу",
+        "job_description": "2. Жұмыс сипаттамасы",
+        "pdf_or_docx": "PDF немесе DOCX, макс 10MB",
+        "paste_job_desc": "Барлық талаптармен толық жұмыс сипаттамасын қойыңыз",
+        "click_to_upload": "Резюме жүктеу үшін басыңыз",
+        "supported_formats": "Қолдау көрсетіледі: PDF, DOCX",
+        "use_profile_skills": "💡 Профильдегі дағдыларды қолданыңыз",
+        "use_profile_skills_desc": "Профильде {count} дағды бар. Дәл іріктеу үшін қолданыңыз!",
+        "use_my_skills": "Профильдегі дағдыларды қолдану",
+        "use_my_skills_desc": "AI тек расталған дағдыларды салыстырады",
+        "add_them_now": "Қазір қосу",
+        
+        # Нәтижелер
+        "excellent_match": "Тамаша сәйкестік",
+        "good_match": "Жақсы сәйкестік",
+        "needs_work": "Жұмыс қажет",
+        "strengths": "Күшті жақтары",
+        "areas_to_address": "Жақсартатын салалар",
+        "what_makes_fit": "Сізді қандай жасайды",
+        "requirements_to_strengthen": "Күшейтетін талаптар",
+        "matched_skills": "СӘЙКЕС ДАҒДЫЛАР",
+        "missing_skills": "ЖЕТІСПЕЙТІН ДАҒДЫЛАР",
+        "additional_skills": "ҚОСЫМША ДАҒДЫЛАР",
+        "experience_match": "Тәжірибе сәйкестігі",
+        "education_match": "Білім сәйкестігі",
+        "recommendations_title": "Ұсыныстар",
+        "actions_to_improve": "Сәйкестікті жақсарту әрекеттері",
+        "analyze_another": "Басқа позицияны талдау",
+        
+        # Резюме жүктеу
+        "upload_resume_title": "Резюме жүктеу",
+        "upload_resume_subtitle": "Жылдам іріктеу үшін профильге резюме жүктеңіз",
+        "current_resume": "Ағымдағы резюме",
+        "resume_uploaded": "✅ Резюме сәтті жүктелді!",
+        "add_your_skills": "Дағдыларды қосыңыз",
+        "add_skills_subtitle": "Дәл іріктеу үшін нақты дағдыларды көрсетіңіз. Бұл талдауды дәлірек етеді!",
+        "why_add_skills": "Неліктен дағдыларды қосу керек?",
+        "accurate_matching": "✓ Дәлірек іріктеу",
+        "ai_knows": "✓ AI сіз не істей алатыныңызды нақты біледі",
+        "better_results": "✓ Жақсы талдау нәтижелері",
+        "avoid_false": "✓ Жалған сәйкестіктен аулақ болу",
+        "save_skills": "Дағдыларды сақтау",
+        "skip_now": "Өткізіп жіберу",
+        
+        # Жалпы
+        "back_to_dashboard": "← Басты бетке оралу",
+        "view": "Қарау",
+        "view_details": "Толығырақ",
+        "file_too_large": "Файл тым үлкен (макс 10MB)",
+        "unsupported_format": "Тек PDF және DOCX файлдары қолдау көрсетіледі",
+        "error_upload": "Сурет файлын жүктеңіз",
+        "image_too_large": "Сурет тым үлкен (макс 5MB)",
+    }
+}
+
+
+def t(key: str, lang: str = "en", **kwargs) -> str:
+    """Get translation for key in specified language"""
+    translation = TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
+    if kwargs:
+        try:
+            return translation.format(**kwargs)
+        except:
+            return translation
+    return translation
+
+
+# ============================================================================
 # AUTHENTICATION
 # ============================================================================
 
@@ -444,6 +908,58 @@ body {
 
 .nav-link:hover {
     color: var(--white);
+}
+
+.language-selector {
+    position: relative;
+}
+
+.lang-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--white);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.lang-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.lang-menu {
+    display: none;
+    position: absolute;
+    top: 48px;
+    right: 0;
+    background: rgba(20, 20, 20, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px;
+    min-width: 160px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+}
+
+.lang-option {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--white);
+    padding: 10px 16px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.lang-option:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .container {
@@ -897,21 +1413,38 @@ textarea.form-control {
 def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     """Generate base HTML"""
     
+    # Get user's language preference
+    lang = user.language if user else "en"
+    
     if user:
+        # Language display names
+        lang_names = {"en": "English", "ru": "Русский", "kk": "Қазақша"}
+        current_lang_name = lang_names.get(lang, "English")
+        
         nav_links = f"""
-            <a href="/dashboard" class="nav-link">Dashboard</a>
-            <a href="/analyze" class="nav-link">Analyze</a>
+            <a href="/dashboard" class="nav-link">{t('dashboard', lang)}</a>
+            <a href="/analyze" class="nav-link">{t('analyze', lang)}</a>
             <a href="/profile" class="nav-link">{user.full_name}</a>
-            <a href="/logout" class="nav-link">Sign out</a>
+            <div class="language-selector">
+                <button class="lang-btn" onclick="toggleLangMenu()">{current_lang_name} ▾</button>
+                <div class="lang-menu" id="langMenu">
+                    <form method="POST" action="/change-language" style="display: contents;">
+                        <button type="submit" name="language" value="en" class="lang-option">English</button>
+                        <button type="submit" name="language" value="ru" class="lang-option">Русский</button>
+                        <button type="submit" name="language" value="kk" class="lang-option">Қазақша</button>
+                    </form>
+                </div>
+            </div>
+            <a href="/logout" class="nav-link">{t('sign_out', lang)}</a>
         """
     else:
-        nav_links = """
+        nav_links = f"""
             <a href="/login" class="nav-link">Sign in</a>
             <a href="/register" class="btn">Get Started</a>
         """
     
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -930,6 +1463,20 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     <main>
         {content}
     </main>
+    <script>
+        function toggleLangMenu() {{
+            const menu = document.getElementById('langMenu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        }}
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {{
+            const langSelector = document.querySelector('.language-selector');
+            if (langSelector && !langSelector.contains(event.target)) {{
+                document.getElementById('langMenu').style.display = 'none';
+            }}
+        }});
+    </script>
 </body>
 </html>"""
 
@@ -1058,6 +1605,7 @@ def register_page(error: str = "") -> str:
 
 def dashboard_page(user: User, db: Session) -> str:
     """Dashboard page"""
+    lang = user.language if user else "en"
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
     recent_analyses = db.query(Analysis).filter(
@@ -1088,44 +1636,44 @@ def dashboard_page(user: User, db: Session) -> str:
                 <div class="text-muted text-xs">{analysis.created_at.strftime('%b %d, %Y at %H:%M')}</div>
             </td>
             <td><span class="{badge_class}">{analysis.match_score:.0f}%</span></td>
-            <td><a href="/result/{analysis.id}" class="btn btn-outline" style="padding: 8px 20px;">View</a></td>
+            <td><a href="/result/{analysis.id}" class="btn btn-outline" style="padding: 8px 20px;">{t('view', lang)}</a></td>
         </tr>
         """
     
     if not recent_list:
-        recent_list = '<tr><td colspan="3" style="text-align: center;" class="text-muted">No analyses yet. <a href="/analyze" style="color: var(--white); text-decoration: underline;">Create your first one</a></td></tr>'
+        recent_list = f'<tr><td colspan="3" style="text-align: center;" class="text-muted">{t("no_analyses", lang)} <a href="/analyze" style="color: var(--white); text-decoration: underline;">{t("create_first", lang)}</a></td></tr>'
     
     content = f"""
     <div class="container">
         <div class="flex-between" style="margin-bottom: 48px;">
             <div>
-                <h1>Dashboard</h1>
-                <p class="text-muted">Welcome back, {user.full_name}</p>
+                <h1>{t('dashboard', lang)}</h1>
+                <p class="text-muted">{t('welcome_back_user', lang)}, {user.full_name}</p>
             </div>
-            <a href="/analyze" class="btn btn-large">New Analysis</a>
+            <a href="/analyze" class="btn btn-large">{t('new_analysis', lang)}</a>
         </div>
         
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value">{total_analyses}</div>
-                <div class="stat-label">Analyses</div>
+                <div class="stat-label">{t('analyses', lang)}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{avg_score_value:.0f}%</div>
-                <div class="stat-label">Avg Match</div>
+                <div class="stat-label">{t('avg_match', lang)}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{latest_score:.0f}%</div>
-                <div class="stat-label">Latest</div>
+                <div class="stat-label">{t('latest', lang)}</div>
             </div>
         </div>
         
         <div class="card">
-            <h3 style="margin-bottom: 24px;">Recent Analyses</h3>
+            <h3 style="margin-bottom: 24px;">{t('recent_analyses', lang)}</h3>
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Resume & Date</th>
+                        <th>{t('resume', lang)}</th>
                         <th>Score</th>
                         <th></th>
                     </tr>
@@ -1137,7 +1685,7 @@ def dashboard_page(user: User, db: Session) -> str:
         </div>
     </div>
     """
-    return get_base_html("Dashboard", content, user)
+    return get_base_html(t('dashboard', lang), content, user)
 
 
 def profile_page(user: User, db: Session) -> str:
@@ -1600,47 +2148,48 @@ Problem Solving, Team Leadership">{user.skills or ''}</textarea>
 
 def analyze_page(user: User, error: str = "") -> str:
     """Analyze page"""
+    lang = user.language if user else "en"
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     content = f"""
     <div class="container-sm">
-        <h1>Analyze Match</h1>
-        <p class="text-muted" style="margin-bottom: 48px;">Upload your resume and paste the job description</p>
+        <h1>{t('analyze_match', lang)}</h1>
+        <p class="text-muted" style="margin-bottom: 48px;">{t('analyze_subtitle', lang)}</p>
         
         {error_html}
         
         <form method="POST" action="/analyze" enctype="multipart/form-data">
             <div class="card">
-                <h3>1. Upload Resume</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 24px;">PDF or DOCX format, max 10MB</p>
+                <h3>{t('upload_resume', lang)}</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">{t('pdf_or_docx', lang)}</p>
                 
                 <div class="file-upload" onclick="document.getElementById('file-input').click();">
                     <div class="file-icon">📄</div>
                     <input type="file" id="file-input" name="file" accept=".pdf,.docx,.doc" required onchange="updateFileName(this)">
-                    <p id="file-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Click to upload resume</p>
-                    <p class="text-muted text-xs">Supported: PDF, DOCX</p>
+                    <p id="file-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">{t('click_to_upload', lang)}</p>
+                    <p class="text-muted text-xs">{t('supported_formats', lang)}</p>
                 </div>
             </div>
             
             {f'''<div class="card" style="background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.15);">
-                <h3 style="margin-bottom: 16px;">💡 Use Your Profile Skills</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 16px;">You have {len([s for s in user.skills.replace(",", "\\n").split("\\n") if s.strip()])} skills in your profile. Use them for more accurate matching!</p>
+                <h3 style="margin-bottom: 16px;">{t('use_profile_skills', lang)}</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 16px;">{t('use_profile_skills_desc', lang, count=len([s for s in user.skills.replace(",", "\\n").split("\\n") if s.strip()]))}</p>
                 <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
                     <input type="checkbox" name="use_profile_skills" value="yes" checked style="width: 20px; height: 20px; cursor: pointer;">
                     <span style="flex: 1;">
-                        <strong>Use my profile skills for accurate matching</strong><br>
-                        <span class="text-muted text-xs">AI will only match skills you've confirmed in your profile</span>
+                        <strong>{t('use_my_skills', lang)}</strong><br>
+                        <span class="text-muted text-xs">{t('use_my_skills_desc', lang)}</span>
                     </span>
                 </label>
-                <p class="text-muted text-xs" style="margin-top: 12px;">Don't have skills in profile? <a href="/edit-profile#skills" style="color: var(--white); text-decoration: underline;">Add them now</a></p>
+                <p class="text-muted text-xs" style="margin-top: 12px;"><a href="/edit-profile#skills" style="color: var(--white); text-decoration: underline;">{t('add_them_now', lang)}</a></p>
             </div>''' if user.skills else ''}
             
             <div class="card">
-                <h3>2. Job Description</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 24px;">Paste the complete job posting including all requirements</p>
+                <h3>{t('job_description', lang)}</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">{t('paste_job_desc', lang)}</p>
                 
                 <div class="form-group">
-                    <textarea name="job_description" class="form-control" required placeholder="Paste the full job description here...
+                    <textarea name="job_description" class="form-control" required placeholder="{t('paste_job_desc', lang)}...
 
 Example:
 Job Title: Senior Software Engineer
@@ -1660,35 +2209,36 @@ Responsibilities:
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary btn-block btn-large">Analyze Match</button>
+            <button type="submit" class="btn btn-primary btn-block btn-large">{t('analyze_match', lang)}</button>
         </form>
     </div>
     
     <script>
     function updateFileName(input) {{
-        const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Click to upload resume';
+        const fileName = (input.files && input.files[0]) ? input.files[0].name : '{t('click_to_upload', lang)}';
         document.getElementById('file-name').textContent = fileName;
     }}
     </script>
     """
-    return get_base_html("Analyze", content, user)
+    return get_base_html(t('analyze', lang), content, user)
 
 
 def result_page(user: User, analysis: Analysis) -> str:
     """Result page"""
+    lang = user.language if user else "en"
     
     data = json.loads(analysis.analysis_data)
     score = analysis.match_score
     
     if score >= 70:
         score_class = "excellent"
-        score_text = "Excellent Match"
+        score_text = t('excellent_match', lang)
     elif score >= 50:
         score_class = "good"
-        score_text = "Good Match"
+        score_text = t('good_match', lang)
     else:
         score_class = "poor"
-        score_text = "Needs Work"
+        score_text = t('needs_work', lang)
     
     pros_html = "".join([f'<li class="feature-item"><span class="feature-icon pro">✓</span><span>{p}</span></li>' for p in data.get('pros', [])])
     cons_html = "".join([f'<li class="feature-item"><span class="feature-icon con">✗</span><span>{c}</span></li>' for c in data.get('cons', [])])
@@ -1709,7 +2259,7 @@ def result_page(user: User, analysis: Analysis) -> str:
     content = f"""
     <div class="container">
         <div style="margin-bottom: 32px;">
-            <a href="/dashboard" class="btn btn-outline">← Dashboard</a>
+            <a href="/dashboard" class="btn btn-outline">{t('back_to_dashboard', lang)}</a>
         </div>
         
         <div class="card">
@@ -1728,16 +2278,16 @@ def result_page(user: User, analysis: Analysis) -> str:
         
         <div class="grid-2">
             <div class="card">
-                <h3>Strengths</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 24px;">What makes you a great fit</p>
+                <h3>{t('strengths', lang)}</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">{t('what_makes_fit', lang)}</p>
                 <ul class="feature-list">
                     {pros_html}
                 </ul>
             </div>
             
             <div class="card">
-                <h3>Areas to Address</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 24px;">Requirements to strengthen</p>
+                <h3>{t('areas_to_address', lang)}</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">{t('requirements_to_strengthen', lang)}</p>
                 <ul class="feature-list">
                     {cons_html}
                 </ul>
@@ -1745,33 +2295,33 @@ def result_page(user: User, analysis: Analysis) -> str:
         </div>
         
         <div class="card">
-            <h3>Skills Analysis</h3>
+            <h3>{t('skills_analysis', lang)}</h3>
             
             <div class="section">
-                <h4 class="text-sm text-muted">MATCHED SKILLS</h4>
+                <h4 class="text-sm text-muted">{t('matched_skills', lang)}</h4>
                 <div style="margin-top: 12px;">
-                    {matched_html if matched_html else '<span class="text-muted">No matched skills</span>'}
+                    {matched_html if matched_html else '<span class="text-muted">-</span>'}
                 </div>
             </div>
             
             <div class="section">
-                <h4 class="text-sm text-muted">MISSING SKILLS</h4>
+                <h4 class="text-sm text-muted">{t('missing_skills', lang)}</h4>
                 <div style="margin-top: 12px;">
-                    {missing_html if missing_html else '<span class="text-muted">No missing skills</span>'}
+                    {missing_html if missing_html else '<span class="text-muted">-</span>'}
                 </div>
             </div>
             
             <div class="section">
-                <h4 class="text-sm text-muted">ADDITIONAL SKILLS</h4>
+                <h4 class="text-sm text-muted">{t('additional_skills', lang)}</h4>
                 <div style="margin-top: 12px;">
-                    {additional_html if additional_html else '<span class="text-muted">No additional skills</span>'}
+                    {additional_html if additional_html else '<span class="text-muted">-</span>'}
                 </div>
             </div>
         </div>
         
         <div class="grid-2">
             <div class="card">
-                <h3>Experience Match</h3>
+                <h3>{t('experience_match', lang)}</h3>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: {exp_score}%"></div>
                 </div>
@@ -1780,7 +2330,7 @@ def result_page(user: User, analysis: Analysis) -> str:
             </div>
             
             <div class="card">
-                <h3>Education Match</h3>
+                <h3>{t('education_match', lang)}</h3>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: {edu_score}%"></div>
                 </div>
@@ -1790,19 +2340,19 @@ def result_page(user: User, analysis: Analysis) -> str:
         </div>
         
         <div class="card">
-            <h3>Recommendations</h3>
-            <p class="text-muted text-sm" style="margin-bottom: 24px;">Actions to improve your match</p>
+            <h3>{t('recommendations_title', lang)}</h3>
+            <p class="text-muted text-sm" style="margin-bottom: 24px;">{t('actions_to_improve', lang)}</p>
             <ul class="feature-list">
                 {recommendations_html}
             </ul>
         </div>
         
         <div style="text-align: center; margin-top: 48px;">
-            <a href="/analyze" class="btn btn-large">Analyze Another Position</a>
+            <a href="/analyze" class="btn btn-large">{t('analyze_another', lang)}</a>
         </div>
     </div>
     """
-    return get_base_html("Results", content, user)
+    return get_base_html(t('analyze', lang), content, user)
 
 
 # ============================================================================
@@ -1822,6 +2372,23 @@ async def startup_event():
     print(f"Using Ollama model: {Config.OLLAMA_MODEL}")
     print(f"Ollama URL: {Config.OLLAMA_API_URL}")
     print("=" * 50)
+
+
+@app.post("/change-language")
+async def change_language(
+    language: str = Form(...),
+    session_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """Change user's language preference"""
+    user = await get_current_user(session_token, db)
+    if user:
+        user.language = language
+        db.commit()
+    
+    # Redirect back to referrer or dashboard
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -2114,7 +2681,10 @@ async def analyze_post(
     if use_profile_skills == "yes" and user.skills:
         candidate_skills = user.skills
     
-    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills)
+    # Use user's language preference for AI analysis
+    user_language = user.language if user.language else "en"
+    
+    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills, user_language)
     
     analysis = Analysis(
         user_id=user.id,
