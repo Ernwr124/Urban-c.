@@ -2257,7 +2257,7 @@ def profile_page(user: User, db: Session) -> str:
     </div>
     
     <style>
-        .profile-header-card {{
+    .profile-header-card {{
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
