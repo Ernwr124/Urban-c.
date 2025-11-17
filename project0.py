@@ -561,19 +561,19 @@ HTML_TEMPLATE = """
                         Just describe what you want to build.
                     </div>
                     <div class="example-prompts">
-                        <div class="example-prompt" onclick="useExample('Create a full-stack todo app with React and Node.js')">
+                        <div class="example-prompt" onclick="useExample(&quot;Create a full-stack todo app with React and Node.js&quot;)">
                             <div class="example-prompt-title">🚀 Full-Stack App</div>
                             <div class="example-prompt-text">Create a complete application</div>
                         </div>
-                        <div class="example-prompt" onclick="useExample('Build a REST API with authentication and database')">
+                        <div class="example-prompt" onclick="useExample(&quot;Build a REST API with authentication and database&quot;)">
                             <div class="example-prompt-title">🔧 REST API</div>
                             <div class="example-prompt-text">Backend with auth & DB</div>
                         </div>
-                        <div class="example-prompt" onclick="useExample('Design a modern landing page with animations')">
+                        <div class="example-prompt" onclick="useExample(&quot;Design a modern landing page with animations&quot;)">
                             <div class="example-prompt-title">🎨 UI Design</div>
                             <div class="example-prompt-text">Beautiful frontend page</div>
                         </div>
-                        <div class="example-prompt" onclick="useExample('Create a Python script for data analysis with pandas')">
+                        <div class="example-prompt" onclick="useExample(&quot;Create a Python script for data analysis with pandas&quot;)">
                             <div class="example-prompt-title">📊 Data Script</div>
                             <div class="example-prompt-text">Analysis & visualization</div>
                         </div>
@@ -655,15 +655,14 @@ HTML_TEMPLATE = """
             const messagesDiv = document.getElementById('messages');
             const assistantDiv = document.createElement('div');
             assistantDiv.className = 'message assistant-message';
-            assistantDiv.innerHTML = `
-                <div class="message-header">
-                    <span class="message-role assistant-role">Project-0</span>
-                </div>
-                <div class="thinking-indicator">
-                    <span class="loading">Thinking</span>
-                </div>
-                <div class="message-content" id="currentResponse"></div>
-            `;
+            assistantDiv.innerHTML = 
+                '<div class="message-header">' +
+                    '<span class="message-role assistant-role">Project-0</span>' +
+                '</div>' +
+                '<div class="thinking-indicator">' +
+                    '<span class="loading">Thinking</span>' +
+                '</div>' +
+                '<div class="message-content" id="currentResponse"></div>';
             messagesDiv.appendChild(assistantDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             
@@ -742,12 +741,11 @@ HTML_TEMPLATE = """
             const roleLabel = role === 'user' ? 'You' : 'Project-0';
             const roleClass = role === 'user' ? 'user-role' : 'assistant-role';
             
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <span class="message-role ${roleClass}">${roleLabel}</span>
-                </div>
-                <div class="message-content">${formatMessage(content)}</div>
-            `;
+            messageDiv.innerHTML = 
+                '<div class="message-header">' +
+                    '<span class="message-role ' + roleClass + '">' + roleLabel + '</span>' +
+                '</div>' +
+                '<div class="message-content">' + formatMessage(content) + '</div>';
             
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
