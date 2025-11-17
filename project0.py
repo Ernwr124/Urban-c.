@@ -18,6 +18,7 @@ import hashlib
 import secrets
 import io
 import zipfile
+import urllib.parse
 
 app = FastAPI(title="Project-0", description="Professional AI MVP Platform")
 
@@ -367,10 +368,17 @@ async def download_project(project_id: int, token: str):
         for filename, content in files.items():
             zip_file.writestr(filename, content)
     zip_buffer.seek(0)
+    
+    # Properly encode filename for unicode support
+    filename = f"{project[0]}.zip"
+    encoded_filename = urllib.parse.quote(filename)
+    
     return StreamingResponse(
         iter([zip_buffer.getvalue()]),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={project[0]}.zip"}
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
     )
 
 @app.get("/api/health")
