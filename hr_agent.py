@@ -1,7 +1,7 @@
 """
-HR Agent - AI-Powered Resume Analysis Platform
-Professional Beta Version - Candidate Edition
-Minimalist Black & White Design with Advanced AI Analysis
+HR Agent - AI-Powered Job Match Analysis
+Compare your resume with job descriptions using Ollama (gpt-oss:20b-cloud)
+Minimalist Black & White Design - Candidate Edition
 """
 
 # ============================================================================
@@ -19,9 +19,9 @@ from pathlib import Path
 
 from fastapi import (
     FastAPI, Request, Response, HTTPException, UploadFile, 
-    File, Form, Depends, Cookie
+    File, Form, Depends, status, Cookie
 )
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -71,7 +71,7 @@ Base = declarative_base()
 
 
 class User(Base):
-    """User model - Candidate profile"""
+    """User model - Candidate only"""
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -208,12 +208,8 @@ def parse_resume(filename: str, file_content: bytes) -> str:
         return "[Unsupported file format]"
 
 
-# ============================================================================
-# AI ANALYSIS - ADVANCED VERSION
-# ============================================================================
-
 async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "") -> Dict[str, Any]:
-    """Compare resume with job description using Ollama - Advanced Russian Analysis"""
+    """Compare resume with job description using Ollama - Always in Russian"""
     
     skills_section = ""
     if candidate_skills:
@@ -225,118 +221,71 @@ async def compare_resume_with_job(resume_text: str, job_description: str, candid
 ВАЖНО: Это навыки, которые кандидат явно подтвердил. 
 Используй их как ПЕРВИЧНЫЙ ИСТОЧНИК при оценке соответствия навыков.
 Помечай навыки как "совпадающие" ТОЛЬКО если они есть в этом списке подтверждённых навыков.
-"""
+Если навык есть в резюме, но НЕТ в списке подтверждённых навыков, будь осторожен."""
     
-    prompt = f"""Ты - эксперт HR-аналитик и карьерный консультант с 15+ летним опытом. Твоя задача - провести МАКСИМАЛЬНО ДЕТАЛЬНЫЙ, ПРОФЕССИОНАЛЬНЫЙ и ТОЧНЫЙ анализ соответствия резюме кандидата описанию вакансии.
+    prompt = f"""Ты - эксперт HR-аналитик и карьерный консультант. Твоя задача - провести МАКСИМАЛЬНО ДЕТАЛЬНЫЙ и ТОЧНЫЙ анализ соответствия резюме кандидата описанию вакансии.
 
-КРИТИЧЕСКИ ВАЖНО: ВЕСЬ АНАЛИЗ ДОЛЖЕН БЫТЬ СТРОГО НА РУССКОМ ЯЗЫКЕ!
+ОТВЕЧАЙ СТРОГО НА РУССКОМ ЯЗЫКЕ. Все тексты, анализы, рекомендации и оценки должны быть ТОЛЬКО НА РУССКОМ.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ТРЕБОВАНИЯ К АНАЛИЗУ:
+1. Будь максимально детальным - давай 7-10 пунктов в каждой категории
+2. Будь честным и конструктивным
+3. Указывай конкретные примеры из резюме
+4. Давай практичные и реализуемые рекомендации
+5. Анализируй не только наличие навыков, но и их глубину
 
 РЕЗЮМЕ КАНДИДАТА:
 {resume_text}
 {skills_section}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 ОПИСАНИЕ ВАКАНСИИ:
 {job_description}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ТРЕБОВАНИЯ К АНАЛИЗУ:
-
-1. ДЕТАЛЬНОСТЬ:
-   - Минимум 7-10 пунктов в каждой категории
-   - Каждый пункт должен быть КОНКРЕТНЫМ с примерами
-   - Избегай общих фраз типа "хороший опыт"
-   - Указывай точные технологии, проекты, достижения
-
-2. ЧЕСТНОСТЬ И ОБЪЕКТИВНОСТЬ:
-   - Оценивай реалистично без преувеличений
-   - Указывай как сильные, так и слабые стороны
-   - Будь конструктивным в критике
-
-3. ПРАКТИЧНОСТЬ:
-   - Все рекомендации должны быть реализуемыми
-   - Указывай конкретные шаги для улучшения
-   - Приоритизируй рекомендации по важности
-
-4. ГЛУБИНА АНАЛИЗА:
-   - Оценивай не только наличие навыков, но и их глубину
-   - Анализируй соответствие уровня опыта требованиям
-   - Учитывай культурный fit и soft skills
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ВЕРНИ ОТВЕТ В ФОРМАТЕ JSON (СТРОГО БЕЗ MARKDOWN):
-
+Проведи глубокий анализ и верни ТОЛЬКО валидный JSON со следующей структурой:
 {{
-    "match_score": <число от 0 до 100>,
-    
+    "match_score": 0-100,
     "pros": [
-        "МИНИМУМ 7-10 КОНКРЕТНЫХ сильных сторон на русском",
-        "Каждый пункт с конкретными примерами из резюме",
-        "Указывай точные технологии, проекты, цифры",
-        "Отмечай уникальные преимущества кандидата"
+        "Минимум 7-10 конкретных сильных сторон кандидата для этой позиции",
+        "Указывай конкретные примеры из резюме",
+        "Отмечай глубину опыта и уровень владения навыками",
+        "Подчеркивай уникальные достижения и преимущества"
     ],
-    
     "cons": [
-        "МИНИМУМ 7-10 КОНКРЕТНЫХ недостатков на русском",
-        "Указывай что именно отсутствует или недостаточно",
-        "Отмечай несоответствия уровня опыта",
-        "Будь конструктивным - предлагай пути решения"
+        "Минимум 7-10 конкретных пробелов или недостающих требований",
+        "Указывай что именно отсутствует или недостаточно развито",
+        "Отмечай несоответствия в уровне опыта",
+        "Будь конструктивным и указывай пути улучшения"
     ],
-    
     "skills_match": {{
-        "matched": [
-            "Список навыков которые ЕСТЬ у кандидата и ТРЕБУЮТСЯ в вакансии"
-        ],
-        "missing": [
-            "Список навыков которых НЕТ у кандидата, но ТРЕБУЮТСЯ в вакансии"
-        ],
-        "additional": [
-            "Дополнительные полезные навыки кандидата, не указанные в вакансии"
-        ]
+        "matched_skills": ["Навыки кандидата, которые ТОЧНО соответствуют требованиям вакансии"],
+        "missing_skills": ["Требуемые навыки, которых НЕТ в резюме"],
+        "additional_skills": ["Дополнительные полезные навыки кандидата, не указанные в вакансии"]
     }},
-    
     "experience_match": {{
-        "score": <0-100>,
-        "analysis": "ДЕТАЛЬНЫЙ анализ опыта работы на русском (4-5 предложений): количество лет, релевантность проектов, уровень ответственности, достижения с цифрами, соответствие требованиям позиции"
+        "score": 0-100,
+        "analysis": "Детальный анализ опыта работы на русском языке: соответствие лет опыта, релевантность проектов, уровень ответственности, достижения. Минимум 3-4 предложения."
     }},
-    
     "education_match": {{
-        "score": <0-100>,
-        "analysis": "ДЕТАЛЬНЫЙ анализ образования на русском (3-4 предложения): специальность, уровень (бакалавр/магистр), релевантность вакансии, дополнительные курсы и сертификаты"
+        "score": 0-100,
+        "analysis": "Детальный анализ образования на русском языке: соответствие специальности, уровень образования, дополнительные курсы и сертификаты. Минимум 2-3 предложения."
     }},
-    
     "recommendations": [
-        "МИНИМУМ 7-10 КОНКРЕТНЫХ рекомендаций на русском",
-        "Каждая рекомендация реализуема и специфична",
-        "Указывай приоритет (высокий/средний/низкий)",
-        "Предлагай конкретные курсы, книги, проекты"
+        "Минимум 7-10 конкретных и практичных действий для улучшения соответствия",
+        "Каждая рекомендация должна быть реализуемой и специфичной",
+        "Укажи приоритетность действий",
+        "Предложи конкретные курсы, сертификаты или направления развития"
     ],
-    
-    "interview_questions": [
-        "5-7 КОНКРЕТНЫХ вопросов на русском для проверки опыта",
-        "Вопросы должны раскрывать реальную глубину знаний",
-        "Включай технические и поведенческие вопросы"
-    ],
-    
-    "summary": "ПОДРОБНОЕ итоговое резюме на русском (4-6 предложений): общая оценка кандидата, ключевые сильные стороны, критические пробелы, потенциал для роста, финальная рекомендация по найму (стоит ли приглашать на интервью)"
+    "summary": "Детальное резюме на русском языке (3-5 предложений): общая оценка кандидата, ключевые сильные стороны, основные пробелы, потенциал для позиции, рекомендация по найму"
 }}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 КРИТИЧЕСКИ ВАЖНО:
-✓ ВСЕ ТЕКСТЫ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ
-✓ МАКСИМАЛЬНАЯ ДЕТАЛИЗАЦИЯ И КОНКРЕТИКА
-✓ ЧЕСТНАЯ И ОБЪЕКТИВНАЯ ОЦЕНКА
-✓ КОНКРЕТНЫЕ ПРИМЕРЫ ИЗ РЕЗЮМЕ
-✓ РЕАЛИЗУЕМЫЕ РЕКОМЕНДАЦИИ
-✓ БЕЗ ОБЩИХ ФРАЗ И ШАБЛОНОВ
+- ВСЕ тексты должны быть ТОЛЬКО на русском языке
+- Давай ДЕТАЛЬНЫЙ анализ, а не поверхностный
+- Будь ЧЕСТНЫМ в оценках
+- Указывай КОНКРЕТНЫЕ примеры
+- Рекомендации должны быть РЕАЛИЗУЕМЫМИ
 
-Верни ТОЛЬКО JSON без дополнительного текста или markdown."""
+Верни ТОЛЬКО JSON, без дополнительного текста."""
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -356,24 +305,21 @@ async def compare_resume_with_job(resume_text: str, job_description: str, candid
                 
                 try:
                     analysis_data = json.loads(response_text)
-                    # Validate structure
-                    if "match_score" in analysis_data and "pros" in analysis_data:
-                        return analysis_data
-                    else:
-                        return create_fallback_analysis()
+                    return analysis_data
                 except json.JSONDecodeError:
-                    print(f"JSON decode error")
-                    return create_fallback_analysis()
+                    print(f"JSON decode error. Response: {response_text[:200]}")
+                    return create_fallback_comparison()
             else:
-                return create_fallback_analysis()
+                print(f"Ollama API error: {response.status_code}")
+                return create_fallback_comparison()
                 
     except Exception as e:
-        print(f"Ollama error: {str(e)}")
-        return create_fallback_analysis()
+        print(f"Ollama connection error: {str(e)}")
+        return create_fallback_comparison()
 
 
-def create_fallback_analysis() -> Dict[str, Any]:
-    """Create fallback analysis when Ollama is unavailable"""
+def create_fallback_comparison() -> Dict[str, Any]:
+    """Create fallback comparison when Ollama is unavailable"""
     return {
         "match_score": 0,
         "pros": [
@@ -385,9 +331,9 @@ def create_fallback_analysis() -> Dict[str, Any]:
             "Проверьте подключение к Ollama"
         ],
         "skills_match": {
-            "matched": [],
-            "missing": ["Ожидание AI-анализа"],
-            "additional": []
+            "matched_skills": [],
+            "missing_skills": ["Ожидание AI-анализа"],
+            "additional_skills": []
         },
         "experience_match": {
             "score": 0,
@@ -402,63 +348,581 @@ def create_fallback_analysis() -> Dict[str, Any]:
             "Загрузите модель: ollama pull gpt-oss:20b-cloud",
             "Проверьте доступность API на http://localhost:11434"
         ],
-        "interview_questions": [
-            "AI-анализ недоступен - запустите Ollama для генерации вопросов"
-        ],
-        "summary": "Для получения детального AI-анализа необходимо подключение к Ollama с моделью gpt-oss:20b-cloud. После подключения вы получите профессиональный анализ с 7-10 пунктами в каждой категории."
+        "summary": "Для получения детального AI-анализа необходимо подключение к Ollama с моделью gpt-oss:20b-cloud."
     }
 
 
 # ============================================================================
-# AUTH DEPENDENCY
+# AUTHENTICATION
 # ============================================================================
 
-def require_auth(session_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)) -> User:
-    """Require authentication"""
+async def get_current_user(
+    session_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Get current authenticated user"""
     if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        return None
     
-    session = db.query(Session).filter(Session.session_token == session_token).first()
-    if not session or session.expires_at < datetime.utcnow():
-        if session:
-            db.delete(session)
-            db.commit()
-        raise HTTPException(status_code=401, detail="Session expired")
+    session = db.query(Session).filter(
+        Session.session_token == session_token,
+        Session.expires_at > datetime.utcnow()
+    ).first()
+    
+    if not session:
+        return None
     
     user = db.query(User).filter(User.id == session.user_id).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found")
-    
+    return user
+
+
+def require_auth(user: Optional[User] = Depends(get_current_user)) -> User:
+    """Require authentication"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
 
 # ============================================================================
-# HTML TEMPLATES - BEAUTIFUL BLACK & WHITE DESIGN
+# MINIMALIST BLACK & WHITE UI
 # ============================================================================
 
-def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
-    """Base HTML template with modern design"""
+MINIMALIST_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --black: #000000;
+    --white: #ffffff;
+    --gray-light: #f5f5f5;
+    --gray-border: #e0e0e0;
+    --gray-text: #666666;
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--black);
+    color: var(--white);
+    line-height: 1.6;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.nav {
+    background: var(--black);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 72px;
+}
+
+.nav-logo {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--white);
+    text-decoration: none;
+    letter-spacing: -0.5px;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+.nav-link {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.nav-link:hover {
+    color: var(--white);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 64px 32px;
+}
+
+.container-sm {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 64px 32px;
+}
+
+.hero {
+    text-align: center;
+    padding: 120px 32px 80px;
+}
+
+.hero h1 {
+    font-size: 64px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -2px;
+    line-height: 1.1;
+}
+
+.hero p {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 600px;
+    margin: 0 auto 48px;
+    line-height: 1.6;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 40px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 24px;
+}
+
+.card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transition: border-color 0.3s;
+}
+
+h1 {
+    font-size: 40px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    letter-spacing: -1px;
+}
+
+h2 {
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+}
+
+h3 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.text-muted {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.text-sm {
+    font-size: 14px;
+}
+
+.text-xs {
+    font-size: 12px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 32px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 12px;
+    border: 2px solid var(--white);
+    background: var(--white);
+    color: var(--black);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    gap: 8px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--white);
+}
+
+.btn-outline:hover {
+    background: var(--white);
+    color: var(--black);
+}
+
+.btn-large {
+    padding: 18px 40px;
+    font-size: 16px;
+}
+
+.btn-block {
+    display: flex;
+    width: 100%;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 12px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 16px 20px;
+    font-size: 15px;
+    color: var(--white);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    outline: none;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.form-control:focus {
+    border-color: var(--white);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+textarea.form-control {
+    min-height: 240px;
+    resize: vertical;
+    line-height: 1.6;
+}
+
+.alert {
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    border: 1px solid;
+}
+
+.alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.alert-error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+    margin-bottom: 48px;
+}
+
+.stat-card {
+    background: var(--white);
+    color: var(--black);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+}
+
+.stat-label {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+}
+
+.score-display {
+    text-align: center;
+    padding: 48px;
+}
+
+.score-circle {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 32px;
+    border: 8px solid;
+    position: relative;
+}
+
+.score-circle.excellent {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.score-circle.good {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: var(--warning);
+    color: var(--warning);
+}
+
+.score-circle.poor {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.score-value {
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -2px;
+}
+
+.score-label {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px;
+}
+
+.feature-list {
+    list-style: none;
+}
+
+.feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.feature-item:last-child {
+    border-bottom: none;
+}
+
+.feature-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.feature-icon.pro {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+}
+
+.feature-icon.con {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+}
+
+.feature-icon.tip {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--white);
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin: 4px;
+}
+
+.badge-success {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.badge-warning {
+    background: rgba(234, 179, 8, 0.2);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+}
+
+.badge-info {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--white);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    text-align: left;
+    padding: 16px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    padding: 20px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.file-upload {
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 64px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.file-upload:hover {
+    border-color: var(--white);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.file-upload input {
+    display: none;
+}
+
+.file-icon {
+    font-size: 56px;
+    margin-bottom: 24px;
+    opacity: 0.6;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 16px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--white);
+    border-radius: 6px;
+    transition: width 0.5s;
+}
+
+.section {
+    margin-bottom: 40px;
+}
+
+.divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 40px 0;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .hero h1 {
+        font-size: 40px;
+    }
     
-    nav_links = ""
+    .hero p {
+        font-size: 16px;
+    }
+    
+    .nav-container {
+        padding: 0 16px;
+    }
+    
+    .container {
+        padding: 40px 16px;
+    }
+    
+    .card {
+        padding: 24px;
+    }
+    
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+"""
+
+
+def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
+    """Generate base HTML"""
+    
     if user:
-        avatar_html = ""
-        if user.avatar:
-            avatar_html = f'<img src="/uploads/avatars/{user.avatar}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 8px;">'
-        else:
-            avatar_html = '<span style="font-size: 20px; margin-right: 8px;">👤</span>'
-        
         nav_links = f"""
             <a href="/dashboard" class="nav-link">Панель</a>
             <a href="/analyze" class="nav-link">Анализ</a>
-            <a href="/profile" class="nav-link" style="display: flex; align-items: center;">
-                {avatar_html}{user.full_name}
-            </a>
+            <a href="/profile" class="nav-link">{user.full_name}</a>
             <a href="/logout" class="nav-link">Выйти</a>
         """
     else:
         nav_links = """
             <a href="/login" class="nav-link">Войти</a>
-            <a href="/register" class="btn-primary">Начать бесплатно</a>
+            <a href="/register" class="btn">Начать</a>
         """
     
     return f"""<!DOCTYPE html>
@@ -467,520 +931,60 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title} - HR Agent</title>
-    <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        
-        :root {{
-            --black: #000000;
-            --white: #FFFFFF;
-            --gray-100: #F5F5F5;
-            --gray-200: #E5E5E5;
-            --gray-300: #D4D4D4;
-            --gray-400: #A3A3A3;
-            --gray-500: #737373;
-            --gray-600: #525252;
-            --gray-700: #404040;
-            --gray-800: #262626;
-            --gray-900: #171717;
-            --success: #22c55e;
-            --warning: #eab308;
-            --danger: #ef4444;
-            --blue: #3b82f6;
-            --purple: #a855f7;
-        }}
-        
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            background: var(--black);
-            color: var(--white);
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }}
-        
-        /* Navigation */
-        nav {{
-            background: rgba(255, 255, 255, 0.03);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            backdrop-filter: blur(20px);
-        }}
-        
-        .nav-container {{
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px 32px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-        
-        .logo {{
-            font-size: 26px;
-            font-weight: 700;
-            color: var(--white);
-            text-decoration: none;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, var(--white), var(--gray-400));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }}
-        
-        .nav-links {{
-            display: flex;
-            gap: 32px;
-            align-items: center;
-        }}
-        
-        .nav-link {{
-            color: var(--white);
-            text-decoration: none;
-            opacity: 0.7;
-            transition: all 0.2s;
-            font-weight: 500;
-            font-size: 15px;
-        }}
-        
-        .nav-link:hover {{
-            opacity: 1;
-        }}
-        
-        /* Buttons */
-        .btn, .btn-primary, .btn-outline, .btn-danger {{
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.2s;
-            font-size: 15px;
-            border: none;
-            text-align: center;
-        }}
-        
-        .btn-primary {{
-            background: var(--white);
-            color: var(--black);
-        }}
-        
-        .btn-primary:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(255, 255, 255, 0.15);
-        }}
-        
-        .btn-outline {{
-            background: transparent;
-            color: var(--white);
-            border: 1.5px solid rgba(255, 255, 255, 0.3);
-        }}
-        
-        .btn-outline:hover {{
-            background: rgba(255, 255, 255, 0.05);
-            border-color: var(--white);
-        }}
-        
-        .btn-danger {{
-            background: var(--danger);
-            color: var(--white);
-        }}
-        
-        .btn-large {{
-            padding: 16px 32px;
-            font-size: 16px;
-        }}
-        
-        /* Layout */
-        .container {{
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 64px 32px;
-        }}
-        
-        .container-sm {{
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 64px 32px;
-        }}
-        
-        /* Card */
-        .card {{
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 40px;
-            margin-bottom: 24px;
-            transition: all 0.3s;
-        }}
-        
-        .card:hover {{
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
-        }}
-        
-        .card-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }}
-        
-        /* Form */
-        .form-group {{
-            margin-bottom: 24px;
-        }}
-        
-        .form-label {{
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--white);
-        }}
-        
-        .form-control {{
-            width: 100%;
-            padding: 14px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1.5px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: var(--white);
-            font-size: 15px;
-            transition: all 0.2s;
-            font-family: inherit;
-        }}
-        
-        .form-control:focus {{
-            outline: none;
-            border-color: var(--white);
-            background: rgba(255, 255, 255, 0.08);
-        }}
-        
-        .form-control::placeholder {{
-            color: var(--gray-500);
-        }}
-        
-        textarea.form-control {{
-            min-height: 140px;
-            resize: vertical;
-        }}
-        
-        /* Typography */
-        h1 {{
-            font-size: 56px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            letter-spacing: -1.5px;
-            line-height: 1.1;
-        }}
-        
-        h2 {{
-            font-size: 40px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            letter-spacing: -1px;
-        }}
-        
-        h3 {{
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 16px;
-        }}
-        
-        .text-muted {{
-            color: var(--gray-400);
-        }}
-        
-        .text-sm {{
-            font-size: 14px;
-        }}
-        
-        .text-xs {{
-            font-size: 12px;
-        }}
-        
-        /* Stats */
-        .stats-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 24px;
-            margin-bottom: 48px;
-        }}
-        
-        .stat-card {{
-            background: rgba(255, 255, 255, 0.03);
-            padding: 32px;
-            border-radius: 16px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s;
-        }}
-        
-        .stat-card:hover {{
-            background: rgba(255, 255, 255, 0.06);
-            transform: translateY(-4px);
-        }}
-        
-        .stat-value {{
-            font-size: 48px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, var(--white), var(--gray-400));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }}
-        
-        .stat-label {{
-            color: var(--gray-400);
-            font-size: 14px;
-            font-weight: 500;
-        }}
-        
-        /* File Upload */
-        .file-upload {{
-            border: 2px dashed rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            padding: 64px 32px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-        }}
-        
-        .file-upload:hover {{
-            border-color: var(--white);
-            background: rgba(255, 255, 255, 0.03);
-        }}
-        
-        .file-icon {{
-            font-size: 64px;
-            margin-bottom: 16px;
-            filter: grayscale(1);
-        }}
-        
-        input[type="file"] {{
-            display: none;
-        }}
-        
-        /* Profile */
-        .profile-header {{
-            display: flex;
-            gap: 32px;
-            align-items: flex-start;
-            margin-bottom: 32px;
-        }}
-        
-        .profile-avatar {{
-            width: 160px;
-            height: 160px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 4px solid var(--white);
-            box-shadow: 0 8px 32px rgba(255, 255, 255, 0.1);
-        }}
-        
-        .profile-info {{
-            flex: 1;
-        }}
-        
-        .skills-list {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 16px;
-        }}
-        
-        .skill-tag {{
-            background: rgba(255, 255, 255, 0.08);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-weight: 500;
-        }}
-        
-        .social-links {{
-            display: flex;
-            gap: 16px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }}
-        
-        .social-link {{
-            color: var(--blue);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }}
-        
-        .social-link:hover {{
-            opacity: 0.8;
-        }}
-        
-        /* Score Badge */
-        .score-badge {{
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            font-size: 48px;
-            font-weight: 700;
-            margin: 32px 0;
-        }}
-        
-        .score-success {{
-            background: linear-gradient(135deg, var(--success), #16a34a);
-            color: var(--white);
-            box-shadow: 0 8px 32px rgba(34, 197, 94, 0.3);
-        }}
-        
-        .score-warning {{
-            background: linear-gradient(135deg, var(--warning), #ca8a04);
-            color: var(--white);
-            box-shadow: 0 8px 32px rgba(234, 179, 8, 0.3);
-        }}
-        
-        .score-danger {{
-            background: linear-gradient(135deg, var(--danger), #dc2626);
-            color: var(--white);
-            box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
-        }}
-        
-        /* Lists */
-        ul {{
-            margin-left: 20px;
-            margin-top: 12px;
-        }}
-        
-        li {{
-            margin-bottom: 12px;
-            line-height: 1.7;
-            color: var(--gray-300);
-        }}
-        
-        /* Hero Section */
-        .hero {{
-            text-align: center;
-            padding: 120px 32px 80px;
-        }}
-        
-        .hero h1 {{
-            font-size: 72px;
-            margin-bottom: 24px;
-        }}
-        
-        .hero-subtitle {{
-            font-size: 20px;
-            color: var(--gray-400);
-            max-width: 600px;
-            margin: 0 auto 48px;
-            line-height: 1.6;
-        }}
-        
-        /* Responsive */
-        @media (max-width: 768px) {{
-            .profile-header {{
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-            }}
-            
-            h1 {{
-                font-size: 40px;
-            }}
-            
-            .hero h1 {{
-                font-size: 48px;
-            }}
-            
-            .nav-links {{
-                gap: 16px;
-            }}
-        }}
-        
-        /* Loading Animation */
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.5; }}
-        }}
-        
-        .loading {{
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }}
-    </style>
+    <style>{MINIMALIST_CSS}</style>
 </head>
 <body>
-    <nav>
+    <nav class="nav">
         <div class="nav-container">
-            <a href="/" class="logo">HR Agent</a>
-            <div class="nav-links">{nav_links}</div>
+            <a href="/" class="nav-logo">HR Agent</a>
+            <div class="nav-links">
+                {nav_links}
+            </div>
         </div>
     </nav>
-    <main>{content}</main>
+    <main>
+        {content}
+    </main>
 </body>
 </html>"""
 
 
 # ============================================================================
-# ROUTES
+# PAGE TEMPLATES
 # ============================================================================
 
-app = FastAPI(
-    title="HR Agent",
-    description="AI-Powered Resume Analysis Platform",
-    version="2.0.0-beta"
-)
-
-
-@app.on_event("startup")
-async def startup():
-    """Initialize on startup"""
-    Config.init()
-    init_db()
-
-
-@app.get("/", response_class=HTMLResponse)
-async def landing():
+def landing_page() -> str:
     """Landing page"""
     content = """
     <div class="hero">
-        <h1>HR Agent</h1>
-        <p class="hero-subtitle">
-            Профессиональный AI-анализ вашего резюме. Узнайте насколько вы подходите для вакансии мечты.
-        </p>
-        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="/register" class="btn-primary btn-large">Начать бесплатно</a>
-            <a href="/login" class="btn-outline btn-large">Войти</a>
+        <h1>Сравните резюме<br>с работой мечты</h1>
+        <p>ИИ-анализ сравнивает ваше резюме с описанием вакансии. Мгновенная обратная связь о том, насколько вы подходите на позицию.</p>
+        <div style="display: flex; gap: 16px; justify-content: center;">
+            <a href="/register" class="btn btn-large">Начать</a>
+            <a href="/login" class="btn btn-outline btn-large">Войти</a>
         </div>
     </div>
     
-    <div class="container" style="padding-top: 0;">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div style="font-size: 48px; margin-bottom: 16px;">🎯</div>
-                <div class="stat-value">AI</div>
-                <div class="stat-label">Анализ с gpt-oss:20b</div>
+    <div class="container">
+        <div class="grid-2">
+            <div class="card">
+                <h3>Процент соответствия</h3>
+                <p class="text-muted">Узнайте точно, насколько ваше резюме соответствует требованиям вакансии. Четкая оценка с детальной разбивкой.</p>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
-                <div class="stat-value">7-10</div>
-                <div class="stat-label">Пунктов в категории</div>
+            
+            <div class="card">
+                <h3>Плюсы и минусы</h3>
+                <p class="text-muted">Узнайте ваши сильные стороны для позиции и области для улучшения. Честная и практичная обратная связь.</p>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 48px; margin-bottom: 16px;">⚡</div>
-                <div class="stat-value">60сек</div>
-                <div class="stat-label">Время анализа</div>
+            
+            <div class="card">
+                <h3>Анализ навыков</h3>
+                <p class="text-muted">Определите совпадающие навыки, недостающие требования и дополнительную квалификацию.</p>
+            </div>
+            
+            <div class="card">
+                <h3>Умные рекомендации</h3>
+                <p class="text-muted">Получите конкретные советы по улучшению соответствия. Работает на Ollama AI (gpt-oss:20b-cloud).</p>
             </div>
         </div>
     </div>
@@ -988,45 +992,756 @@ async def landing():
     return get_base_html("Главная", content)
 
 
-@app.get("/register", response_class=HTMLResponse)
-async def register_page():
-    """Registration page"""
-    content = """
+def login_page(error: str = "") -> str:
+    """Login page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    
+    content = f"""
     <div class="container-sm">
-        <div style="text-align: center; margin-bottom: 48px;">
-            <h1 style="font-size: 48px;">Регистрация</h1>
-            <p class="text-muted">Создайте аккаунт для начала работы</p>
-        </div>
-        
         <div class="card">
+            <h2>С возвращением</h2>
+            <p class="text-muted" style="margin-bottom: 32px;">Войдите в свой аккаунт HR Agent</p>
+            
+            {error_html}
+            
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" required placeholder="ваш@email.com">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-control" required placeholder="••••••••">
+                </div>
+                
+                <button type="submit" class="btn btn-block btn-large">Войти</button>
+            </form>
+            
+            <div class="divider"></div>
+            
+            <p class="text-muted text-sm" style="text-align: center;">
+                Нет аккаунта? <a href="/register" style="color: var(--white); text-decoration: underline;">Создать</a>
+            </p>
+        </div>
+    </div>
+    """
+    return get_base_html("Вход", content)
+
+
+def register_page(error: str = "") -> str:
+    """Register page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    
+    content = f"""
+    <div class="container-sm">
+        <div class="card">
+            <h2>Создать аккаунт</h2>
+            <p class="text-muted" style="margin-bottom: 32px;">Начните работу с HR Agent</p>
+            
+            {error_html}
+            
             <form method="POST" action="/register">
                 <div class="form-group">
-                    <label class="form-label">Полное имя *</label>
+                    <label class="form-label">Полное имя</label>
                     <input type="text" name="full_name" class="form-control" required placeholder="Иван Иванов">
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Email *</label>
-                    <input type="email" name="email" class="form-control" required placeholder="ivan@example.com">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" required placeholder="ваш@email.com">
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Пароль *</label>
-                    <input type="password" name="password" class="form-control" required placeholder="Минимум 6 символов">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-control" required minlength="6" placeholder="Минимум 6 символов">
                 </div>
                 
-                <button type="submit" class="btn-primary btn-large" style="width: 100%;">
-                    Создать аккаунт
-                </button>
+                <button type="submit" class="btn btn-block btn-large">Создать аккаунт</button>
             </form>
+            
+            <div class="divider"></div>
+            
+            <p class="text-muted text-sm" style="text-align: center;">
+                Уже есть аккаунт? <a href="/login" style="color: var(--white); text-decoration: underline;">Войти</a>
+            </p>
         </div>
-        
-        <p class="text-muted text-sm" style="text-align: center; margin-top: 24px;">
-            Уже есть аккаунт? <a href="/login" style="color: var(--white); font-weight: 600;">Войти</a>
-        </p>
     </div>
     """
     return get_base_html("Регистрация", content)
+
+
+def dashboard_page(user: User, db: Session) -> str:
+    """Dashboard page"""
+    
+    total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
+    recent_analyses = db.query(Analysis).filter(
+        Analysis.user_id == user.id
+    ).order_by(Analysis.created_at.desc()).limit(10).all()
+    
+    avg_score = db.query(Analysis).filter(
+        Analysis.user_id == user.id,
+        Analysis.match_score.isnot(None)
+    ).all()
+    
+    avg_score_value = sum([a.match_score for a in avg_score]) / len(avg_score) if avg_score else 0
+    latest_score = recent_analyses[0].match_score if recent_analyses else 0
+    
+    recent_list = ""
+    for analysis in recent_analyses:
+        if analysis.match_score >= 70:
+            badge_class = "badge-success"
+        elif analysis.match_score >= 50:
+            badge_class = "badge-warning"
+        else:
+            badge_class = "badge-warning"
+        
+        recent_list += f"""
+        <tr>
+            <td>
+                <strong>{analysis.filename}</strong>
+                <div class="text-muted text-xs">{analysis.created_at.strftime('%d.%m.%Y в %H:%M')}</div>
+            </td>
+            <td><span class="{badge_class}">{analysis.match_score:.0f}%</span></td>
+            <td><a href="/result/{analysis.id}" class="btn btn-outline" style="padding: 8px 20px;">Просмотр</a></td>
+        </tr>
+        """
+    
+    if not recent_list:
+        recent_list = '<tr><td colspan="3" style="text-align: center;" class="text-muted">Пока нет анализов. <a href="/analyze" style="color: var(--white); text-decoration: underline;">Создайте первый</a></td></tr>'
+    
+    content = f"""
+    <div class="container">
+        <div class="flex-between" style="margin-bottom: 48px;">
+            <div>
+                <h1>Панель</h1>
+                <p class="text-muted">С возвращением, {user.full_name}</p>
+            </div>
+            <a href="/analyze" class="btn btn-large">Новый анализ</a>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{total_analyses}</div>
+                <div class="stat-label">Анализы</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{avg_score_value:.0f}%</div>
+                <div class="stat-label">Средний</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{latest_score:.0f}%</div>
+                <div class="stat-label">Последний</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 24px;">Последние анализы</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Резюме</th>
+                        <th>Балл</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {recent_list}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return get_base_html("Панель", content, user)
+
+
+def profile_page(user: User, db: Session) -> str:
+    """Profile page"""
+    
+    total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
+    
+    # Avatar display
+    avatar_url = f"/uploads/avatars/{user.avatar}" if user.avatar else ""
+    avatar_html = f'<img src="{avatar_url}" alt="Avatar" style="width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 4px solid var(--black);">' if user.avatar else f'<div style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--black); background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 700;">{user.full_name[0].upper()}</div>'
+    
+    # Resume download
+    resume_html = ""
+    if user.resume_file:
+        resume_html = f'<a href="/download-resume" class="btn btn-outline" style="padding: 8px 20px;">📄 Скачать резюме</a>'
+    
+    # Social links
+    social_links = ""
+    if user.linkedin_url:
+        social_links += f'<a href="{user.linkedin_url}" target="_blank" class="social-link">LinkedIn</a>'
+    if user.github_url:
+        social_links += f'<a href="{user.github_url}" target="_blank" class="social-link">GitHub</a>'
+    if user.website:
+        social_links += f'<a href="{user.website}" target="_blank" class="social-link">Website</a>'
+    
+    content = f"""
+    <div class="container">
+        <div class="card">
+            <div style="display: flex; gap: 32px; align-items: start; padding-bottom: 32px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                {avatar_html}
+                <div style="flex: 1;">
+                    <h1 style="font-size: 32px; margin-bottom: 8px;">{user.full_name}</h1>
+                    <p style="font-size: 18px; margin-bottom: 8px; color: rgba(255,255,255,0.9);">{user.headline or 'Добавьте заголовок'}</p>
+                    <p class="text-muted text-sm">{user.location or 'Добавьте локацию'} • {total_analyses} анализов</p>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <a href="/edit-profile" class="btn">Редактировать</a>
+                        {resume_html}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid-2" style="align-items: start;">
+            <div>
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>О себе</h3>
+                        <a href="/edit-profile#about" class="btn btn-outline" style="padding: 6px 16px;">Изменить</a>
+                    </div>
+                    <p class="text-muted">{user.bio or 'Расскажите о себе, своем опыте и что делает вас уникальным.'}</p>
+                </div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">Контакты</h3>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <span class="text-muted text-sm">Email</span>
+                            <span style="font-weight: 500;">{user.email}</span>
+                        </div>
+                        {f'<div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span class="text-muted text-sm">Телефон</span><span style="font-weight: 500;">{user.phone}</span></div>' if user.phone else ''}
+                    </div>
+                </div>
+                
+                {f'<div class="card"><h3 style="margin-bottom: 20px;">Социальные сети</h3><div style="display: flex; gap: 12px; flex-wrap: wrap;">{social_links}</div></div>' if social_links else ''}
+            </div>
+            
+            <div>
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>Навыки</h3>
+                        <a href="/edit-profile#skills" class="btn btn-outline" style="padding: 6px 16px;">Изменить</a>
+                    </div>
+                    {f'<div style="display: flex; flex-wrap: wrap; gap: 8px;">{" ".join([f"<span style=\"display: inline-block; padding: 6px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 13px; color: var(--white);\">{skill.strip()}</span>" for skill in user.skills.replace(",", "\\n").split("\\n") if skill.strip()])}</div>' if user.skills else '<p class="text-muted">Добавьте навыки для более точного подбора. <a href="/edit-profile" style="color: var(--white); text-decoration: underline;">Добавить</a></p>'}
+                </div>
+                
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>Резюме</h3>
+                        <a href="/upload-resume-profile" class="btn btn-outline" style="padding: 6px 16px;">Загрузить</a>
+                    </div>
+                    {f'<div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; text-align: center;"><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="padding: 6px 16px; margin-top: 12px;">Скачать</a></div>' if user.resume_file else '<p class="text-muted">Загрузите резюме для быстрого подбора</p>'}
+                </div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">Активность</h3>
+                    <div style="display: flex; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span style="font-size: 20px; font-weight: 600;">{total_analyses}</span>
+                        <span class="text-muted text-sm">Анализов</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 16px 0;">
+                        <span style="font-size: 20px; font-weight: 600;">{user.created_at.strftime('%b %Y')}</span>
+                        <span class="text-muted text-sm">Участник с</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+    .social-link {
+        padding: 8px 16px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--white);
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    
+    .social-link:hover {
+        background: rgba(255,255,255,0.1);
+        border-color: var(--white);
+    }
+    </style>
+    """
+    return get_base_html("Профиль", content, user)
+
+
+def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
+    """Edit profile page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    success_html = f'<div class="alert alert-success">{success}</div>' if success else ""
+    
+    content = f"""
+    <div class="container-sm">
+        <div style="margin-bottom: 32px;">
+            <a href="/profile" class="btn btn-outline">← Назад к профилю</a>
+        </div>
+        
+        <h1>Редактировать профиль</h1>
+        <p class="text-muted" style="margin-bottom: 32px;">Обновите вашу информацию</p>
+        
+        {error_html}
+        {success_html}
+        
+        <div class="card">
+            <h3 style="margin-bottom: 20px;">Фото профиля</h3>
+            <form method="POST" action="/upload-avatar" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 24px;">
+                <div>
+                    {f'<img src="/uploads/avatars/{user.avatar}" alt="Avatar" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">' if user.avatar else f'<div style="width: 100px; height: 100px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700;">{user.full_name[0].upper()}</div>'}
+                </div>
+                <div style="flex: 1;">
+                    <input type="file" name="avatar" accept="image/*" class="form-control" style="margin-bottom: 12px;">
+                    <button type="submit" class="btn">Загрузить фото</button>
+                </div>
+            </form>
+        </div>
+        
+        <form method="POST" action="/update-profile">
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Основная информация</h3>
+                <div class="form-group">
+                    <label class="form-label">Полное имя</label>
+                    <input type="text" name="full_name" class="form-control" value="{user.full_name}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Заголовок</label>
+                    <input type="text" name="headline" class="form-control" value="{user.headline or ''}" placeholder="Senior Software Engineer at Tech Company">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Локация</label>
+                    <input type="text" name="location" class="form-control" value="{user.location or ''}" placeholder="Алматы, Казахстан">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">О себе</label>
+                    <textarea name="bio" class="form-control" placeholder="Расскажите о себе...">{user.bio or ''}</textarea>
+                </div>
+            </div>
+            
+            <div class="card" id="skills">
+                <h3 style="margin-bottom: 20px;">Навыки</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 16px;">Добавьте реальные навыки для точного поиска вакансий</p>
+                <div class="form-group">
+                    <label class="form-label">Ваши навыки</label>
+                    <textarea name="skills" class="form-control" placeholder="Введите навыки (через запятую или с новой строки):
+
+Примеры:
+React.js, Node.js, TypeScript
+Python, Django, FastAPI
+HTML, CSS, JavaScript, Bootstrap
+Git, Docker, Kubernetes
+Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills or ''}</textarea>
+                    <p class="text-muted text-xs" style="margin-top: 8px;">💡 Эти навыки будут использоваться для точного поиска. Добавляйте только те, которыми реально владеете.</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Контактная информация</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" value="{user.email}" disabled style="opacity: 0.6;">
+                    <p class="text-muted text-xs" style="margin-top: 4px;">Email нельзя изменить</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input type="tel" name="phone" class="form-control" value="{user.phone or ''}" placeholder="+7 (777) 123-45-67">
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 20px;">Социальные сети</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">LinkedIn профиль</label>
+                    <input type="url" name="linkedin_url" class="form-control" value="{user.linkedin_url or ''}" placeholder="https://linkedin.com/in/yourprofile">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">GitHub профиль</label>
+                    <input type="url" name="github_url" class="form-control" value="{user.github_url or ''}" placeholder="https://github.com/yourusername">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Личный сайт</label>
+                    <input type="url" name="website" class="form-control" value="{user.website or ''}" placeholder="https://yourwebsite.com">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-block btn-large">Сохранить изменения</button>
+        </form>
+    </div>
+    """
+    return get_base_html("Редактирование профиля", content, user)
+
+
+def upload_resume_profile_page(user: User, error: str = "", show_skills_form: bool = False) -> str:
+    """Upload resume to profile page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    
+    if show_skills_form:
+        content = f"""
+        <div class="container-sm">
+            <div class="alert alert-success">✅ Резюме успешно загружено!</div>
+            
+            <h1>Добавьте навыки</h1>
+            <p class="text-muted" style="margin-bottom: 32px;">Укажите реальные навыки для точного подбора. Это делает анализ более точным!</p>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">Зачем добавлять навыки?</h3>
+                <ul style="margin-left: 20px; margin-bottom: 24px; color: rgba(255,255,255,0.7);">
+                    <li style="margin-bottom: 8px;">✓ Более точный подбор</li>
+                    <li style="margin-bottom: 8px;">✓ ИИ будет точно знать, что вы умеете</li>
+                    <li style="margin-bottom: 8px;">✓ Лучшие результаты анализа</li>
+                    <li style="margin-bottom: 8px;">✓ Избежание ложных совпадений</li>
+                </ul>
+                
+                <form method="POST" action="/update-skills">
+                    <div class="form-group">
+                        <label class="form-label">Ваши навыки (опционально, но рекомендуется)</label>
+                        <textarea name="skills" class="form-control" placeholder="Введите навыки (по одной в строке или через запятую):
+
+Пример:
+React.js, Node.js, TypeScript
+Python, Django, FastAPI
+HTML, CSS, JavaScript
+Git, Docker, AWS
+Problem Solving, Team Leadership">{user.skills or ''}</textarea>
+                        <p class="text-muted text-xs" style="margin-top: 8px;">Будьте честны! Добавляйте только те навыки, которыми реально владеете.</p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button type="submit" class="btn btn-large" style="flex: 1;">Сохранить навыки</button>
+                        <a href="/profile" class="btn btn-outline btn-large" style="flex: 1; display: flex; align-items: center; justify-content: center; text-decoration: none;">Пропустить</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        """
+    else:
+        content = f"""
+        <div class="container-sm">
+            <div style="margin-bottom: 32px;">
+                <a href="/profile" class="btn btn-outline">← Назад</a>
+            </div>
+            
+            <h1>Загрузить резюме</h1>
+            <p class="text-muted" style="margin-bottom: 32px;">Загрузите резюме в профиль для быстрого подбора</p>
+            
+            {error_html}
+            
+            <div class="card">
+                <form method="POST" action="/upload-resume-profile" enctype="multipart/form-data">
+                    <div class="file-upload" onclick="document.getElementById('resume-input').click();">
+                        <div class="file-icon">📄</div>
+                        <input type="file" id="resume-input" name="resume" accept=".pdf,.docx,.doc" required onchange="updateResumeFileName(this)">
+                        <p id="resume-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Нажмите для загрузки резюме</p>
+                        <p class="text-muted text-xs">PDF или DOCX, макс 10MB</p>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-block btn-large" style="margin-top: 24px;">Загрузить резюме</button>
+                </form>
+            </div>
+            
+            {f'<div class="card"><h3>Текущее резюме</h3><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="margin-top: 12px;">Скачать текущее резюме</a></div>' if user.resume_file else ''}
+        </div>
+        
+        <script>
+        function updateResumeFileName(input) {{
+            const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Нажмите для загрузки резюме';
+            document.getElementById('resume-name').textContent = fileName;
+        }}
+        </script>
+        """
+    
+    return get_base_html("Загрузить резюме", content, user)
+
+
+def analyze_page(user: User, error: str = "") -> str:
+    """Analyze page"""
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    
+    content = f"""
+    <div class="container-sm">
+        <h1>Анализ соответствия</h1>
+        <p class="text-muted" style="margin-bottom: 48px;">Загрузите резюме и вставьте описание вакансии</p>
+        
+        {error_html}
+        
+        <form method="POST" action="/analyze" enctype="multipart/form-data">
+            <div class="card">
+                <h3>1. Загрузите резюме</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">PDF или DOCX, макс 10MB</p>
+                
+                <div class="file-upload" onclick="document.getElementById('file-input').click();">
+                    <div class="file-icon">📄</div>
+                    <input type="file" id="file-input" name="file" accept=".pdf,.docx,.doc" required onchange="updateFileName(this)">
+                    <p id="file-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Нажмите для загрузки резюме</p>
+                    <p class="text-muted text-xs">Поддерживается: PDF, DOCX</p>
+                </div>
+            </div>
+            
+            {f'''<div class="card" style="background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.15);">
+                <h3 style="margin-bottom: 16px;">💡 Используйте навыки из профиля</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 16px;">У вас {len([s for s in user.skills.replace(",", "\\n").split("\\n") if s.strip()])} навыков в профиле. Используйте их для точного подбора!</p>
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                    <input type="checkbox" name="use_profile_skills" value="yes" checked style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="flex: 1;">
+                        <strong>Использовать навыки из профиля</strong><br>
+                        <span class="text-muted text-xs">ИИ будет сопоставлять только подтвержденные навыки</span>
+                    </span>
+                </label>
+                <p class="text-muted text-xs" style="margin-top: 12px;"><a href="/edit-profile#skills" style="color: var(--white); text-decoration: underline;">Добавить сейчас</a></p>
+            </div>''' if user.skills else ''}
+            
+            <div class="card">
+                <h3>2. Описание вакансии</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">Вставьте полное описание вакансии со всеми требованиями</p>
+                
+                <div class="form-group">
+                    <textarea name="job_description" class="form-control" required placeholder="Вставьте полное описание вакансии со всеми требованиями...
+
+Пример:
+Название: Senior Software Engineer
+Локация: Удаленно
+Зарплата: $120k-$150k
+
+О роли:
+Ищем опытного разработчика...
+
+Требования:
+• 5+ лет опыта с Python
+• Опыт веб-разработки
+• Знание баз данных и API...
+
+Обязанности:
+• Проектировать и внедрять функции..."></textarea>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-block btn-large">Анализировать соответствие</button>
+        </form>
+    </div>
+    
+    <script>
+    function updateFileName(input) {{
+        const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Нажмите для загрузки резюме';
+        document.getElementById('file-name').textContent = fileName;
+    }}
+    </script>
+    """
+    return get_base_html("Анализ", content, user)
+
+
+def result_page(user: User, analysis: Analysis) -> str:
+    """Result page"""
+    
+    data = json.loads(analysis.analysis_data)
+    score = analysis.match_score
+    
+    if score >= 70:
+        score_class = "excellent"
+        score_text = "Отличное соответствие"
+    elif score >= 50:
+        score_class = "good"
+        score_text = "Хорошее соответствие"
+    else:
+        score_class = "poor"
+        score_text = "Требуется работа"
+    
+    pros_html = "".join([f'<li class="feature-item"><span class="feature-icon pro">✓</span><span>{p}</span></li>' for p in data.get('pros', [])])
+    cons_html = "".join([f'<li class="feature-item"><span class="feature-icon con">✗</span><span>{c}</span></li>' for c in data.get('cons', [])])
+    
+    matched_skills = data.get('skills_match', {}).get('matched_skills', [])
+    missing_skills = data.get('skills_match', {}).get('missing_skills', [])
+    additional_skills = data.get('skills_match', {}).get('additional_skills', [])
+    
+    matched_html = "".join([f'<span class="badge badge-success">{s}</span>' for s in matched_skills])
+    missing_html = "".join([f'<span class="badge badge-warning">{s}</span>' for s in missing_skills])
+    additional_html = "".join([f'<span class="badge badge-info">{s}</span>' for s in additional_skills])
+    
+    recommendations_html = "".join([f'<li class="feature-item"><span class="feature-icon tip">💡</span><span>{r}</span></li>' for r in data.get('recommendations', [])])
+    
+    exp_score = data.get('experience_match', {}).get('score', 0)
+    edu_score = data.get('education_match', {}).get('score', 0)
+    
+    content = f"""
+    <div class="container">
+        <div style="margin-bottom: 32px;">
+            <a href="/dashboard" class="btn btn-outline">← Назад к панели</a>
+        </div>
+        
+        <div class="card">
+            <div class="score-display">
+                <div class="score-circle {score_class}">
+                    <div class="score-value">{score:.0f}%</div>
+                    <div class="score-label">Match</div>
+                </div>
+                <h2>{score_text}</h2>
+                <p class="text-muted">{data.get('summary', '')}</p>
+                <div class="text-muted text-sm" style="margin-top: 20px;">
+                    📄 {analysis.filename} • {analysis.created_at.strftime('%d.%m.%Y')}
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid-2">
+            <div class="card">
+                <h3>Сильные стороны</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">Что делает вас подходящим</p>
+                <ul class="feature-list">
+                    {pros_html}
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h3>Области для улучшения</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 24px;">Требования для усиления</p>
+                <ul class="feature-list">
+                    {cons_html}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>Анализ навыков</h3>
+            
+            <div class="section">
+                <h4 class="text-sm text-muted">СОВПАДАЮЩИЕ НАВЫКИ</h4>
+                <div style="margin-top: 12px;">
+                    {matched_html if matched_html else '<span class="text-muted">-</span>'}
+                </div>
+            </div>
+            
+            <div class="section">
+                <h4 class="text-sm text-muted">НЕДОСТАЮЩИЕ НАВЫКИ</h4>
+                <div style="margin-top: 12px;">
+                    {missing_html if missing_html else '<span class="text-muted">-</span>'}
+                </div>
+            </div>
+            
+            <div class="section">
+                <h4 class="text-sm text-muted">ДОПОЛНИТЕЛЬНЫЕ НАВЫКИ</h4>
+                <div style="margin-top: 12px;">
+                    {additional_html if additional_html else '<span class="text-muted">-</span>'}
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid-2">
+            <div class="card">
+                <h3>Соответствие опыта</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {exp_score}%"></div>
+                </div>
+                <p style="margin-top: 16px; font-weight: 600; font-size: 18px;">{exp_score}%</p>
+                <p class="text-muted text-sm" style="margin-top: 8px;">{data.get('experience_match', {}).get('analysis', '')}</p>
+            </div>
+            
+            <div class="card">
+                <h3>Соответствие образования</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {edu_score}%"></div>
+                </div>
+                <p style="margin-top: 16px; font-weight: 600; font-size: 18px;">{edu_score}%</p>
+                <p class="text-muted text-sm" style="margin-top: 8px;">{data.get('education_match', {}).get('analysis', '')}</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>Рекомендации</h3>
+            <p class="text-muted text-sm" style="margin-bottom: 24px;">Действия для улучшения соответствия</p>
+            <ul class="feature-list">
+                {recommendations_html}
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin-top: 48px;">
+            <a href="/analyze" class="btn btn-large">Анализировать другую позицию</a>
+        </div>
+    </div>
+    """
+    return get_base_html("Анализ", content, user)
+
+
+# ============================================================================
+# FASTAPI APP & ROUTES
+# ============================================================================
+
+app = FastAPI(title="HR Agent", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize application"""
+    Config.init()
+    init_db()
+    print("=" * 50)
+    print("HR Agent initialized successfully")
+    print(f"Using Ollama model: {Config.OLLAMA_MODEL}")
+    print(f"Ollama URL: {Config.OLLAMA_API_URL}")
+    print("=" * 50)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Landing page"""
+    return landing_page()
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_get():
+    """Login page"""
+    return login_page()
+
+
+@app.post("/login")
+async def login_post(
+    response: Response,
+    email: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Handle login"""
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user or not verify_password(password, user.password_hash):
+        return HTMLResponse(login_page(error="Неверный email или пароль"))
+    
+    session_token = create_session_token()
+    expires_at = datetime.utcnow() + timedelta(hours=Config.SESSION_LIFETIME_HOURS)
+    
+    session = Session(
+        session_token=session_token,
+        user_id=user.id,
+        expires_at=expires_at
+    )
+    db.add(session)
+    
+    user.last_login = datetime.utcnow()
+    db.commit()
+    
+    response = RedirectResponse(url="/dashboard", status_code=302)
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        max_age=Config.SESSION_LIFETIME_HOURS * 3600
+    )
+    
+    return response
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_get():
+    """Register page"""
+    return register_page()
 
 
 @app.post("/register")
@@ -1037,12 +1752,10 @@ async def register_post(
     db: Session = Depends(get_db)
 ):
     """Handle registration"""
-    existing = db.query(User).filter(User.email == email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
     
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Пароль должен быть минимум 6 символов")
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        return HTMLResponse(register_page(error="Email уже зарегистрирован"))
     
     user = User(
         email=email,
@@ -1051,302 +1764,233 @@ async def register_post(
     )
     db.add(user)
     db.commit()
-    db.refresh(user)
     
-    session = Session(
-        session_token=create_session_token(),
-        user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(hours=Config.SESSION_LIFETIME_HOURS)
-    )
-    db.add(session)
-    db.commit()
-    
-    response = RedirectResponse("/dashboard", status_code=303)
-    response.set_cookie(
-        key="session_token",
-        value=session.session_token,
-        httponly=True,
-        max_age=Config.SESSION_LIFETIME_HOURS * 3600
-    )
-    return response
-
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page():
-    """Login page"""
-    content = """
-    <div class="container-sm">
-        <div style="text-align: center; margin-bottom: 48px;">
-            <h1 style="font-size: 48px;">Вход</h1>
-            <p class="text-muted">Войдите в свой аккаунт</p>
-        </div>
-        
-        <div class="card">
-            <form method="POST" action="/login">
-                <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" required placeholder="ivan@example.com">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Пароль</label>
-                    <input type="password" name="password" class="form-control" required placeholder="Введите пароль">
-                </div>
-                
-                <button type="submit" class="btn-primary btn-large" style="width: 100%;">
-                    Войти
-                </button>
-            </form>
-        </div>
-        
-        <p class="text-muted text-sm" style="text-align: center; margin-top: 24px;">
-            Нет аккаунта? <a href="/register" style="color: var(--white); font-weight: 600;">Зарегистрироваться</a>
-        </p>
-    </div>
-    """
-    return get_base_html("Вход", content)
-
-
-@app.post("/login")
-async def login_post(
-    email: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    """Handle login"""
-    user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Неверный email или пароль")
-    
-    user.last_login = datetime.utcnow()
-    
-    session = Session(
-        session_token=create_session_token(),
-        user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(hours=Config.SESSION_LIFETIME_HOURS)
-    )
-    db.add(session)
-    db.commit()
-    
-    response = RedirectResponse("/dashboard", status_code=303)
-    response.set_cookie(
-        key="session_token",
-        value=session.session_token,
-        httponly=True,
-        max_age=Config.SESSION_LIFETIME_HOURS * 3600
-    )
-    return response
+    return RedirectResponse(url="/login", status_code=302)
 
 
 @app.get("/logout")
-async def logout(session_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
-    """Logout"""
+async def logout(
+    response: Response,
+    session_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """Handle logout"""
     if session_token:
-        session = db.query(Session).filter(Session.session_token == session_token).first()
-        if session:
-            db.delete(session)
-            db.commit()
+        db.query(Session).filter(Session.session_token == session_token).delete()
+        db.commit()
     
-    response = RedirectResponse("/", status_code=303)
+    response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie("session_token")
     return response
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(user: User = Depends(require_auth), db: Session = Depends(get_db)):
-    """Dashboard"""
-    total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
-    analyses = db.query(Analysis).filter(Analysis.user_id == user.id).order_by(
-        Analysis.created_at.desc()
-    ).limit(10).all()
+async def dashboard(
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Dashboard page"""
+    return dashboard_page(user, db)
+
+
+@app.get("/profile", response_class=HTMLResponse)
+async def profile(
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Profile page"""
+    return profile_page(user, db)
+
+
+@app.get("/edit-profile", response_class=HTMLResponse)
+async def edit_profile_get(user: User = Depends(require_auth)):
+    """Edit profile page"""
+    return edit_profile_page(user)
+
+
+@app.post("/update-profile")
+async def update_profile(
+    full_name: str = Form(...),
+    headline: str = Form(""),
+    location: str = Form(""),
+    bio: str = Form(""),
+    phone: str = Form(""),
+    skills: str = Form(""),
+    linkedin_url: str = Form(""),
+    github_url: str = Form(""),
+    website: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Update profile information"""
+    user.full_name = full_name
+    user.headline = headline
+    user.location = location
+    user.bio = bio
+    user.phone = phone
+    user.skills = skills
+    user.linkedin_url = linkedin_url
+    user.github_url = github_url
+    user.website = website
     
-    avg_score = 0
-    if analyses:
-        scores = [a.match_score for a in analyses if a.match_score]
-        avg_score = sum(scores) / len(scores) if scores else 0
+    db.commit()
     
-    history_html = ""
-    for analysis in analyses:
-        score = int(analysis.match_score) if analysis.match_score else 0
-        
-        if score >= 70:
-            color_class = "score-success"
-            color = "var(--success)"
-        elif score >= 50:
-            color_class = "score-warning"
-            color = "var(--warning)"
-        else:
-            color_class = "score-danger"
-            color = "var(--danger)"
-        
-        job_preview = (analysis.job_description[:180] + "...") if len(analysis.job_description) > 180 else analysis.job_description
-        
-        history_html += f"""
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 32px;">
-                <div style="flex: 1;">
-                    <h3 style="margin-bottom: 12px;">{analysis.filename}</h3>
-                    <p class="text-muted text-sm" style="margin-bottom: 8px;">
-                        {analysis.created_at.strftime('%d.%m.%Y в %H:%M')}
-                    </p>
-                    <p class="text-sm" style="color: var(--gray-400); line-height: 1.6;">
-                        {job_preview}
-                    </p>
-                </div>
-                <div style="text-align: center;">
-                    <div class="score-badge {color_class}" style="width: 100px; height: 100px; font-size: 32px;">
-                        {score}%
-                    </div>
-                    <a href="/result/{analysis.id}" class="btn-outline" style="margin-top: 16px; display: inline-block;">
-                        Посмотреть
-                    </a>
-                </div>
-            </div>
-        </div>
-        """
+    return RedirectResponse(url="/profile", status_code=302)
+
+
+@app.post("/update-skills")
+async def update_skills(
+    skills: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Update user skills"""
+    user.skills = skills
+    db.commit()
     
-    if not history_html:
-        history_html = """
-        <div class="card" style="text-align: center; padding: 80px 32px;">
-            <div style="font-size: 72px; margin-bottom: 24px;">📄</div>
-            <h3 style="margin-bottom: 16px;">Анализов пока нет</h3>
-            <p class="text-muted" style="margin-bottom: 32px;">
-                Загрузите своё резюме и описание вакансии для получения детального AI-анализа
-            </p>
-            <a href="/analyze" class="btn-primary btn-large">Начать анализ</a>
-        </div>
-        """
+    return RedirectResponse(url="/profile", status_code=302)
+
+
+@app.post("/upload-avatar")
+async def upload_avatar(
+    avatar: UploadFile = File(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Upload profile avatar"""
     
-    content = f"""
-    <div class="container">
-        <div style="margin-bottom: 48px;">
-            <h1>Панель управления</h1>
-            <p class="text-muted">Добро пожаловать, {user.full_name}!</p>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{total_analyses}</div>
-                <div class="stat-label">Всего анализов</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{int(avg_score)}%</div>
-                <div class="stat-label">Средний балл</div>
-            </div>
-        </div>
-        
-        <div style="margin-bottom: 48px; display: flex; gap: 16px; flex-wrap: wrap;">
-            <a href="/analyze" class="btn-primary btn-large">Новый анализ</a>
-            <a href="/profile" class="btn-outline btn-large">Мой профиль</a>
-        </div>
-        
-        <h2 style="margin-bottom: 32px;">История анализов</h2>
-        {history_html}
-    </div>
-    """
-    return get_base_html("Панель", content, user)
+    if not avatar.content_type.startswith("image/"):
+        return HTMLResponse(edit_profile_page(user, error="Загрузите файл изображения"))
+    
+    file_content = await avatar.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        return HTMLResponse(edit_profile_page(user, error="Изображение слишком большое (макс 5MB)"))
+    
+    file_ext = avatar.filename.split(".")[-1] if "." in avatar.filename else "jpg"
+    filename = f"{user.id}_{datetime.utcnow().timestamp()}.{file_ext}"
+    file_path = Config.UPLOAD_DIR / "avatars" / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    
+    user.avatar = filename
+    db.commit()
+    
+    return RedirectResponse(url="/edit-profile", status_code=302)
+
+
+@app.get("/upload-resume-profile", response_class=HTMLResponse)
+async def upload_resume_profile_get(user: User = Depends(require_auth)):
+    """Upload resume to profile page"""
+    return upload_resume_profile_page(user)
+
+
+@app.post("/upload-resume-profile")
+async def upload_resume_profile_post(
+    resume: UploadFile = File(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Handle resume upload to profile"""
+    
+    if not (resume.filename.endswith(".pdf") or resume.filename.endswith(".docx") or resume.filename.endswith(".doc")):
+        return HTMLResponse(upload_resume_profile_page(user, error="Поддерживаются только PDF и DOCX файлы"))
+    
+    file_content = await resume.read()
+    if len(file_content) > Config.MAX_FILE_SIZE:
+        return HTMLResponse(upload_resume_profile_page(user, error="Файл слишком большой (макс 10MB)"))
+    
+    filename = f"{user.id}_resume_{datetime.utcnow().timestamp()}_{resume.filename}"
+    file_path = Config.UPLOAD_DIR / "resumes" / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    
+    user.resume_file = filename
+    db.commit()
+    
+    return HTMLResponse(upload_resume_profile_page(user, show_skills_form=True))
+
+
+@app.get("/download-resume")
+async def download_resume(user: User = Depends(require_auth)):
+    """Download user's resume"""
+    if not user.resume_file:
+        raise HTTPException(status_code=404, detail="Резюме не загружено")
+    
+    file_path = Config.UPLOAD_DIR / "resumes" / user.resume_file
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Файл резюме не найден")
+    
+    return FileResponse(file_path, filename=user.resume_file.split("_", 3)[-1] if "_" in user.resume_file else user.resume_file)
+
+
+@app.get("/uploads/{folder}/{filename}")
+async def serve_upload(folder: str, filename: str):
+    """Serve uploaded files"""
+    file_path = Config.UPLOAD_DIR / folder / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    
+    return FileResponse(file_path)
 
 
 @app.get("/analyze", response_class=HTMLResponse)
-async def analyze_page(user: User = Depends(require_auth)):
-    """Analysis page"""
-    content = """
-    <div class="container-sm">
-        <div style="margin-bottom: 48px;">
-            <h1>AI-Анализ резюме</h1>
-            <p class="text-muted">
-                Получите профессиональный анализ соответствия вашего резюме выбранной вакансии
-            </p>
-        </div>
-        
-        <form method="POST" action="/analyze" enctype="multipart/form-data">
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">📄 Шаг 1: Загрузите резюме</h3>
-                <div class="file-upload" onclick="document.getElementById('resume-input').click();">
-                    <div class="file-icon">📄</div>
-                    <input type="file" id="resume-input" name="resume" accept=".pdf,.docx" required>
-                    <p style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">Выберите файл резюме</p>
-                    <p class="text-muted">PDF или DOCX, максимум 10MB</p>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">💼 Шаг 2: Опишите вакансию</h3>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Полное описание вакансии *</label>
-                    <textarea 
-                        name="job_description" 
-                        class="form-control" 
-                        required 
-                        placeholder="Вставьте полное описание вакансии: должность, требования, обязанности, квалификация, технологии..."
-                        style="min-height: 220px;"
-                    ></textarea>
-                    <p class="text-muted text-xs" style="margin-top: 12px;">
-                        💡 Чем детальнее описание, тем точнее и полезнее будет AI-анализ
-                    </p>
-                </div>
-            </div>
-            
-            <button type="submit" class="btn-primary btn-large" style="width: 100%; font-size: 18px;">
-                🚀 Запустить AI-анализ
-            </button>
-        </form>
-    </div>
-    
-    <script>
-        document.getElementById('resume-input').addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || '';
-            if (fileName) {
-                const uploadDiv = document.querySelector('.file-upload');
-                uploadDiv.innerHTML = `
-                    <div class="file-icon">✅</div>
-                    <p style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">${fileName}</p>
-                    <p class="text-muted">Файл успешно загружен</p>
-                `;
-            }
-        });
-    </script>
-    """
-    return get_base_html("Анализ резюме", content, user)
+async def analyze_get(user: User = Depends(require_auth)):
+    """Analyze page"""
+    return analyze_page(user)
 
 
 @app.post("/analyze")
 async def analyze_post(
-    resume: UploadFile = File(...),
+    file: UploadFile = File(...),
     job_description: str = Form(...),
+    use_profile_skills: str = Form("no"),
     user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
-    """Handle analysis"""
-    content = await resume.read()
-    if len(content) > Config.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Файл слишком большой (макс 10MB)")
+    """Handle analysis request"""
     
-    resume_text = parse_resume(resume.filename, content)
+    file_content = await file.read()
+    if len(file_content) > Config.MAX_FILE_SIZE:
+        return HTMLResponse(analyze_page(user, error="Файл слишком большой (макс 10MB)"))
     
-    if "[Error" in resume_text or "[Unsupported" in resume_text:
-        raise HTTPException(status_code=400, detail=f"Ошибка обработки файла: {resume_text}")
+    file_path = Config.UPLOAD_DIR / f"{user.id}_{datetime.utcnow().timestamp()}_{file.filename}"
+    with open(file_path, "wb") as f:
+        f.write(file_content)
     
-    analysis_result = await compare_resume_with_job(resume_text, job_description, user.skills)
+    resume_text = parse_resume(file.filename, file_content)
+    
+    candidate_skills = ""
+    if use_profile_skills == "yes" and user.skills:
+        candidate_skills = user.skills
+    
+    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills)
     
     analysis = Analysis(
         user_id=user.id,
-        filename=resume.filename,
-        file_path="",
+        filename=file.filename,
+        file_path=str(file_path),
         job_description=job_description,
-        match_score=analysis_result.get('match_score', 0),
-        analysis_data=json.dumps(analysis_result, ensure_ascii=False)
+        match_score=analysis_data.get("match_score", 0),
+        analysis_data=json.dumps(analysis_data)
     )
     db.add(analysis)
     db.commit()
-    db.refresh(analysis)
     
-    return RedirectResponse(f"/result/{analysis.id}", status_code=303)
+    return RedirectResponse(url=f"/result/{analysis.id}", status_code=302)
 
 
 @app.get("/result/{analysis_id}", response_class=HTMLResponse)
-async def result_page(analysis_id: int, user: User = Depends(require_auth), db: Session = Depends(get_db)):
-    """Result page"""
+async def result_detail(
+    analysis_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Result detail page"""
+    
     analysis = db.query(Analysis).filter(
         Analysis.id == analysis_id,
         Analysis.user_id == user.id
@@ -1355,469 +1999,28 @@ async def result_page(analysis_id: int, user: User = Depends(require_auth), db: 
     if not analysis:
         raise HTTPException(status_code=404, detail="Анализ не найден")
     
-    data = json.loads(analysis.analysis_data)
-    score = int(data.get('match_score', 0))
-    
-    if score >= 70:
-        color_class = "score-success"
-        status_text = "Отличное соответствие"
-        status_icon = "🎉"
-    elif score >= 50:
-        color_class = "score-warning"
-        status_text = "Хорошее соответствие"
-        status_icon = "👍"
-    else:
-        color_class = "score-danger"
-        status_text = "Требуется улучшение"
-        status_icon = "📈"
-    
-    # Pros
-    pros_html = ""
-    for pro in data.get('pros', []):
-        pros_html += f"<li>{pro}</li>"
-    
-    # Cons
-    cons_html = ""
-    for con in data.get('cons', []):
-        cons_html += f"<li>{con}</li>"
-    
-    # Recommendations
-    recs_html = ""
-    for rec in data.get('recommendations', []):
-        recs_html += f"<li>{rec}</li>"
-    
-    # Interview questions
-    questions_html = ""
-    for q in data.get('interview_questions', []):
-        questions_html += f"<li>{q}</li>"
-    
-    # Skills
-    skills_match = data.get('skills_match', {})
-    matched = skills_match.get('matched', [])
-    missing = skills_match.get('missing', [])
-    additional = skills_match.get('additional', [])
-    
-    matched_html = ", ".join(matched) if matched else "Не указано"
-    missing_html = ", ".join(missing) if missing else "Не указано"
-    additional_html = ", ".join(additional) if additional else "Не указано"
-    
-    # Experience and Education
-    exp_match = data.get('experience_match', {})
-    exp_score = exp_match.get('score', 0)
-    exp_analysis = exp_match.get('analysis', 'Нет данных')
-    
-    edu_match = data.get('education_match', {})
-    edu_score = edu_match.get('score', 0)
-    edu_analysis = edu_match.get('analysis', 'Нет данных')
-    
-    content = f"""
-    <div class="container">
-        <div style="margin-bottom: 32px;">
-            <h1>Результат анализа</h1>
-            <p class="text-muted">
-                {analysis.filename} • {analysis.created_at.strftime('%d.%m.%Y в %H:%M')}
-            </p>
-        </div>
-        
-        <!-- Main Score -->
-        <div class="card" style="text-align: center; background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08)); padding: 60px 40px;">
-            <div style="font-size: 56px; margin-bottom: 24px;">{status_icon}</div>
-            <div class="score-badge {color_class}" style="width: 140px; height: 140px; font-size: 56px; margin: 0 auto;">
-                {score}%
-            </div>
-            <h2 style="margin: 32px 0 8px;">{status_text}</h2>
-            <p class="text-muted">Соответствие вакансии</p>
-        </div>
-        
-        <!-- Pros & Cons -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-top: 24px;">
-            <div class="card">
-                <h3 style="color: var(--success); margin-bottom: 24px;">✓ Сильные стороны</h3>
-                <ul>{pros_html}</ul>
-            </div>
-            
-            <div class="card">
-                <h3 style="color: var(--danger); margin-bottom: 24px;">✗ Области для улучшения</h3>
-                <ul>{cons_html}</ul>
-            </div>
-        </div>
-        
-        <!-- Skills Analysis -->
-        <div class="card">
-            <h3 style="margin-bottom: 24px;">🎯 Анализ навыков</h3>
-            <div style="display: grid; gap: 24px;">
-                <div>
-                    <strong style="color: var(--success); font-size: 16px;">✓ Есть у вас:</strong>
-                    <p class="text-muted" style="margin-top: 8px; line-height: 1.8;">{matched_html}</p>
-                </div>
-                <div>
-                    <strong style="color: var(--danger); font-size: 16px;">✗ Не хватает:</strong>
-                    <p class="text-muted" style="margin-top: 8px; line-height: 1.8;">{missing_html}</p>
-                </div>
-                <div>
-                    <strong style="color: var(--blue); font-size: 16px;">+ Дополнительные:</strong>
-                    <p class="text-muted" style="margin-top: 8px; line-height: 1.8;">{additional_html}</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Experience & Education -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px;">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h3 style="margin: 0;">💼 Опыт работы</h3>
-                    <span style="font-size: 24px; font-weight: 700; color: var(--success);">{exp_score}%</span>
-                </div>
-                <p class="text-muted" style="line-height: 1.8;">
-                    {exp_analysis}
-                </p>
-            </div>
-            
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h3 style="margin: 0;">🎓 Образование</h3>
-                    <span style="font-size: 24px; font-weight: 700; color: var(--success);">{edu_score}%</span>
-                </div>
-                <p class="text-muted" style="line-height: 1.8;">
-                    {edu_analysis}
-                </p>
-            </div>
-        </div>
-        
-        <!-- Recommendations -->
-        <div class="card">
-            <h3 style="margin-bottom: 24px;">💡 Рекомендации для улучшения</h3>
-            <ul>{recs_html}</ul>
-        </div>
-        
-        <!-- Interview Questions -->
-        {f'''
-        <div class="card" style="background: linear-gradient(135deg, rgba(59,130,246,0.05), rgba(168,85,247,0.05));">
-            <h3 style="margin-bottom: 24px;">❓ Возможные вопросы на интервью</h3>
-            <p class="text-muted" style="margin-bottom: 16px;">
-                Подготовьтесь к этим вопросам перед собеседованием:
-            </p>
-            <ul>{questions_html}</ul>
-        </div>
-        ''' if questions_html and 'недоступен' not in questions_html else ''}
-        
-        <!-- Summary -->
-        <div class="card" style="background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 2px solid rgba(255,255,255,0.1);">
-            <h3 style="margin-bottom: 16px;">📋 Итоговое резюме</h3>
-            <p style="line-height: 1.9; font-size: 16px; color: var(--gray-300);">
-                {data.get('summary', 'Нет данных')}
-            </p>
-        </div>
-        
-        <!-- Actions -->
-        <div style="display: flex; gap: 16px; margin-top: 48px; flex-wrap: wrap;">
-            <a href="/dashboard" class="btn-outline btn-large">← Назад к панели</a>
-            <a href="/analyze" class="btn-primary btn-large">Новый анализ</a>
-            <a href="/profile" class="btn-outline btn-large">Обновить профиль</a>
-        </div>
-    </div>
-    """
-    return get_base_html("Результат анализа", content, user)
+    return result_page(user, analysis)
 
 
-@app.get("/profile", response_class=HTMLResponse)
-async def profile_page(user: User = Depends(require_auth), db: Session = Depends(get_db)):
-    """Profile page"""
-    
-    avatar_html = ""
-    if user.avatar:
-        avatar_html = f'<img src="/uploads/avatars/{user.avatar}" class="profile-avatar" alt="{user.full_name}">'
-    else:
-        avatar_html = '''<div class="profile-avatar" style="background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); 
-            display: flex; align-items: center; justify-content: center; font-size: 72px;">👤</div>'''
-    
-    skills_html = ""
-    if user.skills:
-        skills_list = [s.strip() for s in user.skills.split(',') if s.strip()]
-        for skill in skills_list:
-            skills_html += f'<span class="skill-tag">{skill}</span>'
-    else:
-        skills_html = '<p class="text-muted">Навыки не указаны</p>'
-    
-    social_html = ""
-    if user.linkedin_url:
-        social_html += f'<a href="{user.linkedin_url}" target="_blank" class="social-link">🔗 LinkedIn</a>'
-    if user.github_url:
-        social_html += f'<a href="{user.github_url}" target="_blank" class="social-link">💻 GitHub</a>'
-    if user.website:
-        social_html += f'<a href="{user.website}" target="_blank" class="social-link">🌐 Веб-сайт</a>'
-    
-    if not social_html:
-        social_html = '<p class="text-muted text-sm">Социальные сети не добавлены</p>'
-    
-    resume_html = ""
-    if user.resume_file:
-        resume_html = f'''
-        <div style="display: flex; gap: 16px; align-items: center;">
-            <a href="/uploads/resumes/{user.resume_file}" target="_blank" class="btn-outline">
-                📄 Скачать резюме
-            </a>
-            <span class="text-muted text-sm">{user.resume_file}</span>
-        </div>
-        '''
-    else:
-        resume_html = '<p class="text-muted">Резюме не загружено</p>'
-    
-    content = f"""
-    <div class="container">
-        <h1 style="margin-bottom: 48px;">Профиль</h1>
-        
-        <div class="card">
-            <div class="profile-header">
-                {avatar_html}
-                <div class="profile-info">
-                    <h2 style="margin-bottom: 12px;">{user.full_name}</h2>
-                    <p class="text-muted" style="font-size: 20px; margin-bottom: 12px;">
-                        {user.headline or 'Добавьте заголовок профиля'}
-                    </p>
-                    <p class="text-muted" style="margin-bottom: 8px;">
-                        📍 {user.location or 'Не указано'} • 📧 {user.email}
-                    </p>
-                    {f'<p class="text-muted">📱 {user.phone}</p>' if user.phone else ''}
-                    <div class="social-links">
-                        {social_html}
-                    </div>
-                </div>
-            </div>
-            
-            {f'''
-            <div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <h3 style="margin-bottom: 16px;">О себе</h3>
-                <p class="text-muted" style="line-height: 1.8;">
-                    {user.bio}
-                </p>
-            </div>
-            ''' if user.bio else ''}
-            
-            <div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <h3 style="margin-bottom: 20px;">Навыки</h3>
-                <div class="skills-list">
-                    {skills_html}
-                </div>
-                <p class="text-muted text-xs" style="margin-top: 16px;">
-                    💡 Эти навыки используются для более точного AI-анализа
-                </p>
-            </div>
-            
-            <div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <h3 style="margin-bottom: 20px;">Резюме</h3>
-                {resume_html}
-            </div>
-            
-            <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <a href="/profile/edit" class="btn-primary btn-large">Редактировать профиль</a>
-            </div>
-        </div>
-    </div>
-    """
-    return get_base_html("Профиль", content, user)
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "model": Config.OLLAMA_MODEL,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
-@app.get("/profile/edit", response_class=HTMLResponse)
-async def edit_profile_page(user: User = Depends(require_auth)):
-    """Edit profile page"""
-    
-    avatar_preview = ""
-    if user.avatar:
-        avatar_preview = f'''
-        <div style="text-align: center; margin-bottom: 24px;">
-            <img src="/uploads/avatars/{user.avatar}" 
-                 style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid var(--white);">
-        </div>
-        '''
-    
-    content = f"""
-    <div class="container-sm">
-        <h1 style="margin-bottom: 48px;">Редактирование профиля</h1>
-        
-        <form method="POST" action="/profile/update" enctype="multipart/form-data">
-            <!-- Avatar -->
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">Фото профиля</h3>
-                {avatar_preview}
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Загрузить новое фото</label>
-                    <input type="file" name="avatar" accept="image/*" class="form-control">
-                    <p class="text-muted text-xs" style="margin-top: 8px;">PNG, JPG или WEBP, макс 5MB</p>
-                </div>
-            </div>
-            
-            <!-- Basic Info -->
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">Основная информация</h3>
-                
-                <div class="form-group">
-                    <label class="form-label">Полное имя *</label>
-                    <input type="text" name="full_name" class="form-control" value="{user.full_name}" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Заголовок профиля</label>
-                    <input type="text" name="headline" class="form-control" value="{user.headline}" 
-                           placeholder="Frontend Developer | React Specialist">
-                    <p class="text-muted text-xs" style="margin-top: 8px;">
-                        Например: "Senior Python Developer" или "Data Scientist"
-                    </p>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Местоположение</label>
-                    <input type="text" name="location" class="form-control" value="{user.location}" 
-                           placeholder="Москва, Россия">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Телефон</label>
-                    <input type="tel" name="phone" class="form-control" value="{user.phone}" 
-                           placeholder="+7 (999) 123-45-67">
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">О себе</label>
-                    <textarea name="bio" class="form-control" 
-                              placeholder="Расскажите о себе, своём опыте и карьерных целях...">{user.bio}</textarea>
-                </div>
-            </div>
-            
-            <!-- Skills -->
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">Навыки</h3>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Ваши навыки *</label>
-                    <textarea name="skills" class="form-control" 
-                              placeholder="Python, JavaScript, React, Node.js, Docker, Kubernetes...">{user.skills}</textarea>
-                    <p class="text-muted text-xs" style="margin-top: 8px;">
-                        💡 Перечислите через запятую. Эти навыки будут использоваться для более точного AI-анализа
-                    </p>
-                </div>
-            </div>
-            
-            <!-- Social Links -->
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">Социальные сети</h3>
-                
-                <div class="form-group">
-                    <label class="form-label">LinkedIn</label>
-                    <input type="url" name="linkedin_url" class="form-control" value="{user.linkedin_url}" 
-                           placeholder="https://linkedin.com/in/username">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">GitHub</label>
-                    <input type="url" name="github_url" class="form-control" value="{user.github_url}" 
-                           placeholder="https://github.com/username">
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Личный сайт</label>
-                    <input type="url" name="website" class="form-control" value="{user.website}" 
-                           placeholder="https://mywebsite.com">
-                </div>
-            </div>
-            
-            <!-- Resume -->
-            <div class="card">
-                <h3 style="margin-bottom: 24px;">Резюме</h3>
-                {f'<p class="text-muted text-sm" style="margin-bottom: 16px;">Текущее: {user.resume_file}</p>' if user.resume_file else ''}
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Загрузить резюме</label>
-                    <input type="file" name="resume" accept=".pdf,.docx" class="form-control">
-                    <p class="text-muted text-xs" style="margin-top: 8px;">PDF или DOCX, макс 10MB</p>
-                </div>
-            </div>
-            
-            <!-- Actions -->
-            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                <button type="submit" class="btn-primary btn-large">Сохранить изменения</button>
-                <a href="/profile" class="btn-outline btn-large">Отмена</a>
-            </div>
-        </form>
-    </div>
-    """
-    return get_base_html("Редактирование профиля", content, user)
-
-
-@app.post("/profile/update")
-async def update_profile(
-    full_name: str = Form(...),
-    headline: str = Form(""),
-    location: str = Form(""),
-    phone: str = Form(""),
-    bio: str = Form(""),
-    skills: str = Form(""),
-    linkedin_url: str = Form(""),
-    github_url: str = Form(""),
-    website: str = Form(""),
-    avatar: Optional[UploadFile] = File(None),
-    resume: Optional[UploadFile] = File(None),
-    user: User = Depends(require_auth),
-    db: Session = Depends(get_db)
-):
-    """Update profile"""
-    
-    user.full_name = full_name
-    user.headline = headline
-    user.location = location
-    user.phone = phone
-    user.bio = bio
-    user.skills = skills
-    user.linkedin_url = linkedin_url
-    user.github_url = github_url
-    user.website = website
-    
-    # Handle avatar upload
-    if avatar and avatar.filename:
-        avatar_content = await avatar.read()
-        if len(avatar_content) <= 5 * 1024 * 1024:  # 5MB
-            ext = avatar.filename.split('.')[-1]
-            filename = f"avatar_{user.id}_{secrets.token_urlsafe(8)}.{ext}"
-            filepath = Config.UPLOAD_DIR / "avatars" / filename
-            
-            with open(filepath, 'wb') as f:
-                f.write(avatar_content)
-            
-            user.avatar = filename
-    
-    # Handle resume upload
-    if resume and resume.filename:
-        resume_content = await resume.read()
-        if len(resume_content) <= Config.MAX_FILE_SIZE:
-            ext = resume.filename.split('.')[-1]
-            filename = f"resume_{user.id}_{secrets.token_urlsafe(8)}.{ext}"
-            filepath = Config.UPLOAD_DIR / "resumes" / filename
-            
-            with open(filepath, 'wb') as f:
-                f.write(resume_content)
-            
-            user.resume_file = filename
-    
-    db.commit()
-    return RedirectResponse("/profile", status_code=303)
-
-
-@app.get("/uploads/{folder}/{filename}")
-async def serve_upload(folder: str, filename: str):
-    """Serve uploaded files"""
-    file_path = Config.UPLOAD_DIR / folder / filename
-    if file_path.exists():
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="File not found")
-
+# ============================================================================
+# MAIN
+# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n" + "="*60)
-    print("🚀 HR Agent - Beta Version")
-    print("="*60)
-    print("✨ Professional Resume Analysis Platform")
-    print("🎯 Advanced AI Analysis with gpt-oss:20b-cloud")
-    print("🎨 Beautiful Black & White Design")
-    print("📊 7-10 Points per Category")
-    print("="*60)
-    print("\n💡 Запуск на http://localhost:8000\n")
-    uvicorn.run("hr_agent:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "hr_agent:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )
