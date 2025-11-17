@@ -62,6 +62,9 @@ class Config:
         cls.UPLOAD_DIR.mkdir(exist_ok=True)
         (cls.UPLOAD_DIR / "avatars").mkdir(exist_ok=True)
         (cls.UPLOAD_DIR / "resumes").mkdir(exist_ok=True)
+        (cls.UPLOAD_DIR / "videos").mkdir(exist_ok=True)
+        (cls.UPLOAD_DIR / "certificates").mkdir(exist_ok=True)
+        (cls.UPLOAD_DIR / "portfolio").mkdir(exist_ok=True)
 
 
 # ============================================================================
@@ -90,6 +93,7 @@ class User(Base):
     # Profile media
     avatar = Column(String, default="")  # Path to avatar image
     resume_file = Column(String, default="")  # Path to uploaded resume
+    video_resume = Column(String, default="")  # Path to video resume (for candidates)
     
     # Skills (manually entered for accurate matching)
     skills = Column(Text, default="")  # Comma-separated or structured text
@@ -103,6 +107,14 @@ class User(Base):
     website = Column(String, default="")
     whatsapp = Column(String, default="")  # WhatsApp number or link
     instagram = Column(String, default="")  # Instagram username or link
+    
+    # HR-specific fields
+    company_name = Column(String, default="")  # Company name for HR
+    company_description = Column(Text, default="")  # Company description for HR
+    
+    # Ratings
+    average_rating = Column(Float, default=0.0)  # Average rating
+    total_reviews = Column(Integer, default=0)  # Total number of reviews
     
     # Meta
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -146,6 +158,93 @@ class Request(Base):
     status = Column(String, default="pending")  # 'pending', 'viewed', 'responded'
     created_at = Column(DateTime, default=datetime.utcnow)
     viewed_at = Column(DateTime, nullable=True)
+
+
+class Job(Base):
+    """Job/Vacancy model for HR specialists"""
+    __tablename__ = "jobs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hr_id = Column(Integer, index=True)  # HR who created the job
+    title = Column(String, nullable=False)  # Job title
+    description = Column(Text, nullable=False)  # Full job description
+    requirements = Column(Text, default="")  # Requirements
+    skills_required = Column(Text, default="")  # Required skills
+    location = Column(String, default="")
+    salary_range = Column(String, default="")  # e.g. "$50k-$80k"
+    employment_type = Column(String, default="full-time")  # full-time, part-time, contract
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Portfolio(Base):
+    """Portfolio items for candidates"""
+    __tablename__ = "portfolio"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    project_url = Column(String, default="")  # Link to project
+    image_url = Column(String, default="")  # Screenshot/image
+    technologies = Column(Text, default="")  # Technologies used
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Certificate(Base):
+    """Certificates for candidates"""
+    __tablename__ = "certificates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    title = Column(String, nullable=False)  # Certificate name
+    issuer = Column(String, default="")  # Issuing organization
+    issue_date = Column(String, default="")  # Date issued
+    credential_id = Column(String, default="")  # Credential ID
+    credential_url = Column(String, default="")  # Verification URL
+    file_path = Column(String, default="")  # Path to certificate file
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Message(Base):
+    """Chat messages between HR and candidates"""
+    __tablename__ = "messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, index=True)  # User who sent the message
+    receiver_id = Column(Integer, index=True)  # User who receives the message
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Review(Base):
+    """Reviews between HR and candidates"""
+    __tablename__ = "reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, index=True)  # User who writes the review
+    reviewee_id = Column(Integer, index=True)  # User being reviewed
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    comment = Column(Text, default="")
+    is_public = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Interview(Base):
+    """Video interviews/calls"""
+    __tablename__ = "interviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hr_id = Column(Integer, index=True)
+    candidate_id = Column(Integer, index=True)
+    scheduled_at = Column(DateTime, nullable=True)
+    meeting_url = Column(String, default="")  # Zoom/Meet link
+    status = Column(String, default="scheduled")  # scheduled, completed, cancelled
+    notes = Column(Text, default="")
+    recording_url = Column(String, default="")  # Link to recording
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # ============================================================================
@@ -1940,8 +2039,116 @@ def dashboard_page(user: User, db: Session) -> str:
     return get_base_html(t('dashboard', lang), content, user)
 
 
+def hr_profile_page(user: User, db: Session) -> str:
+    """HR-specialist profile page"""
+    
+    # Get HR's jobs
+    jobs = db.query(Job).filter(Job.hr_id == user.id, Job.is_active == True).all()
+    
+    # Get reviews
+    reviews = db.query(Review).filter(Review.reviewee_id == user.id, Review.is_public == True).order_by(Review.created_at.desc()).limit(5).all()
+    
+    jobs_html = ""
+    for job in jobs:
+        jobs_html += f'''
+        <div class="card" style="margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="flex: 1;">
+                    <h3 style="margin-bottom: 8px;">{job.title}</h3>
+                    <p class="text-muted text-sm">{job.location or "Удаленно"} • {job.employment_type} • {job.salary_range or "По договоренности"}</p>
+                    <p style="margin-top: 12px;">{job.description[:200]}...</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <a href="/job/{job.id}/edit" class="btn btn-outline btn-sm">Редактировать</a>
+                    <form method="POST" action="/job/{job.id}/delete" style="display: inline;">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444;">Удалить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        '''
+    
+    if not jobs_html:
+        jobs_html = '<p class="text-muted" style="text-align: center; padding: 40px;">Вакансий пока нет</p>'
+    
+    reviews_html = ""
+    for review in reviews:
+        reviewer = db.query(User).filter(User.id == review.reviewer_id).first()
+        if reviewer:
+            stars = "⭐" * review.rating + "☆" * (5 - review.rating)
+            reviews_html += f'''
+            <div style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between;">
+                    <strong>{reviewer.full_name}</strong>
+                    <span>{stars}</span>
+                </div>
+                <p class="text-sm" style="margin-top: 8px;">{review.comment}</p>
+                <p class="text-muted text-xs" style="margin-top: 8px;">{review.created_at.strftime("%d.%m.%Y")}</p>
+            </div>
+            '''
+    
+    if not reviews_html:
+        reviews_html = '<p class="text-muted" style="text-align: center; padding: 20px;">Отзывов пока нет</p>'
+    
+    avatar = f'<img src="/uploads/avatars/{user.avatar}" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.2);">' if user.avatar else f'<div style="width: 120px; height: 120px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 700;">{user.full_name[0].upper()}</div>'
+    
+    rating_stars = "⭐" * int(user.average_rating) + "☆" * (5 - int(user.average_rating)) if user.average_rating > 0 else "☆☆☆☆☆"
+    
+    content = f"""
+    <div class="container">
+        <div class="card">
+            <div style="display: flex; gap: 32px; align-items: start;">
+                {avatar}
+                <div style="flex: 1;">
+                    <h1 style="margin-bottom: 8px;">{user.full_name}</h1>
+                    <p class="text-muted" style="margin-bottom: 8px; font-size: 18px;">HR-специалист{" • " + user.company_name if user.company_name else ""}</p>
+                    <p class="text-muted" style="margin-bottom: 16px;">📍 {user.location or "Не указано"}</p>
+                    <div style="margin-bottom: 16px;">
+                        {rating_stars} <span class="text-muted">({user.average_rating:.1f} / {user.total_reviews} отзывов)</span>
+                    </div>
+                    <a href="/profile/edit" class="btn btn-outline">Редактировать профиль</a>
+                </div>
+            </div>
+        </div>
+        
+        {f'<div class="card"><h3 style="margin-bottom: 16px;">О компании</h3><p style="line-height: 1.8;">{user.company_description}</p></div>' if user.company_description else ''}
+        
+        {f'<div class="card"><h3 style="margin-bottom: 16px;">О себе</h3><p style="line-height: 1.8;">{user.bio}</p></div>' if user.bio else ''}
+        
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h3>Активные вакансии ({len(jobs)})</h3>
+                <a href="/jobs/create" class="btn btn-primary">+ Добавить вакансию</a>
+            </div>
+            {jobs_html}
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 24px;">Отзывы ({user.total_reviews})</h3>
+            {reviews_html}
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">Контакты</h3>
+            <p><strong>Email:</strong> {user.email}</p>
+            {f'<p style="margin-top: 8px;"><strong>Телефон:</strong> {user.phone}</p>' if user.phone else ''}
+            {f'<p style="margin-top: 8px;"><strong>WhatsApp:</strong> {user.whatsapp}</p>' if user.whatsapp else ''}
+            {f'<p style="margin-top: 8px;"><strong>Instagram:</strong> {user.instagram}</p>' if user.instagram else ''}
+            {f'<p style="margin-top: 8px;"><strong>LinkedIn:</strong> <a href="{user.linkedin_url}" target="_blank">{user.linkedin_url}</a></p>' if user.linkedin_url else ''}
+        </div>
+    </div>
+    """
+    return get_base_html("Профиль HR", content, user)
+
+
 def profile_page(user: User, db: Session) -> str:
-    """LinkedIn-style profile page - Russian only"""
+    """Profile page router - Russian only"""
+    
+    # Route to different profile based on role
+    if user.role == "hr":
+        return hr_profile_page(user, db)
+    
+    # Candidate profile
     lang = "ru"  # Always Russian
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
