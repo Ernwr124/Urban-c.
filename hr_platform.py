@@ -79,6 +79,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
+    role = Column(String, default="candidate")  # 'candidate' or 'hr'
     
     # Profile information
     headline = Column(String, default="")  # e.g. "Senior Software Engineer at Company"
@@ -100,6 +101,8 @@ class User(Base):
     linkedin_url = Column(String, default="")
     github_url = Column(String, default="")
     website = Column(String, default="")
+    whatsapp = Column(String, default="")  # WhatsApp number or link
+    instagram = Column(String, default="")  # Instagram username or link
     
     # Meta
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -130,6 +133,19 @@ class Session(Base):
     user_id = Column(Integer, index=True)
     expires_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Request(Base):
+    """HR requests to candidates"""
+    __tablename__ = "requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hr_id = Column(Integer, index=True)  # HR specialist who sent request
+    candidate_id = Column(Integer, index=True)  # Candidate who receives request
+    message = Column(Text)  # Message from HR
+    status = Column(String, default="pending")  # 'pending', 'viewed', 'responded'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    viewed_at = Column(DateTime, nullable=True)
 
 
 # ============================================================================
@@ -933,6 +949,26 @@ body {
     color: var(--white);
 }
 
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification-badge.active {
+    display: flex;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -1388,12 +1424,27 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     lang = "ru"
     
     if user:
-        nav_links = f"""
-            <a href="/dashboard" class="nav-link">{t('dashboard', lang)}</a>
-            <a href="/analyze" class="nav-link">{t('analyze', lang)}</a>
-            <a href="/profile" class="nav-link">{user.full_name}</a>
-            <a href="/logout" class="nav-link">{t('sign_out', lang)}</a>
-        """
+        # Different navigation for HR and Candidates
+        if user.role == "hr":
+            nav_links = f"""
+                <a href="/dashboard" class="nav-link">Панель</a>
+                <a href="/candidates" class="nav-link">Кандидаты</a>
+                <a href="/profile" class="nav-link">{user.full_name}</a>
+                <a href="/logout" class="nav-link">Выйти</a>
+            """
+        else:  # candidate
+            # Count unread requests
+            from sqlalchemy import select
+            nav_links = f"""
+                <a href="/dashboard" class="nav-link">{t('dashboard', lang)}</a>
+                <a href="/analyze" class="nav-link">{t('analyze', lang)}</a>
+                <a href="/notifications" class="nav-link" style="position: relative;">
+                    🔔
+                    <span class="notification-badge" id="notification-count"></span>
+                </a>
+                <a href="/profile" class="nav-link">{user.full_name}</a>
+                <a href="/logout" class="nav-link">{t('sign_out', lang)}</a>
+            """
     else:
         nav_links = f"""
             <a href="/login" class="nav-link">Войти</a>
@@ -1517,6 +1568,22 @@ def register_page(error: str = "") -> str:
             {error_html}
             
             <form method="POST" action="/register">
+                <div class="form-group">
+                    <label class="form-label">Я регистрируюсь как:</label>
+                    <div style="display: flex; gap: 16px; margin-top: 12px;">
+                        <label style="flex: 1; cursor: pointer;">
+                            <input type="radio" name="role" value="candidate" checked required style="margin-right: 8px;">
+                            <span style="font-weight: 500;">👤 Кандидат</span>
+                            <p class="text-muted text-xs" style="margin: 4px 0 0 24px;">Ищу работу, хочу анализировать резюме</p>
+                        </label>
+                        <label style="flex: 1; cursor: pointer;">
+                            <input type="radio" name="role" value="hr" required style="margin-right: 8px;">
+                            <span style="font-weight: 500;">💼 HR-специалист</span>
+                            <p class="text-muted text-xs" style="margin: 4px 0 0 24px;">Ищу кандидатов для вакансий</p>
+                        </label>
+                    </div>
+                </div>
+                
                 <div class="form-group">
                     <label class="form-label">Полное имя</label>
                     <input type="text" name="full_name" class="form-control" required placeholder="Иван Иванов">
@@ -2383,18 +2450,20 @@ async def register_post(
     full_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    role: str = Form(...),  # 'candidate' or 'hr'
     db: Session = Depends(get_db)
 ):
     """Handle registration"""
     
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
-        return HTMLResponse(register_page(error="Email already registered"))
+        return HTMLResponse(register_page(error="Email уже зарегистрирован"))
     
     user = User(
         email=email,
         password_hash=hash_password(password),
-        full_name=full_name
+        full_name=full_name,
+        role=role  # Save user role
     )
     db.add(user)
     db.commit()
