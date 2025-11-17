@@ -969,6 +969,75 @@ body {
     display: flex;
 }
 
+.notifications-dropdown {
+    position: relative;
+}
+
+.notifications-panel {
+    display: none;
+    position: absolute;
+    top: 50px;
+    right: 0;
+    width: 400px;
+    max-height: 500px;
+    overflow-y: auto;
+    background: rgba(20, 20, 20, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+}
+
+.notifications-panel.active {
+    display: block;
+}
+
+.notification-item {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-links {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.notification-link-btn {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: var(--white);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.notification-link-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dismiss-btn {
+    padding: 8px 16px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.dismiss-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -1433,15 +1502,16 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
                 <a href="/logout" class="nav-link">Выйти</a>
             """
         else:  # candidate
-            # Count unread requests
-            from sqlalchemy import select
             nav_links = f"""
                 <a href="/dashboard" class="nav-link">{t('dashboard', lang)}</a>
                 <a href="/analyze" class="nav-link">{t('analyze', lang)}</a>
-                <a href="/notifications" class="nav-link" style="position: relative;">
-                    🔔
-                    <span class="notification-badge" id="notification-count"></span>
-                </a>
+                <div class="notifications-dropdown" style="position: relative;">
+                    <button class="nav-link" onclick="toggleNotifications()" style="background: none; border: none; cursor: pointer; position: relative;">
+                        🔔
+                        <span class="notification-badge" id="notification-count"></span>
+                    </button>
+                    <div class="notifications-panel" id="notificationsPanel"></div>
+                </div>
                 <a href="/profile" class="nav-link">{user.full_name}</a>
                 <a href="/logout" class="nav-link">{t('sign_out', lang)}</a>
             """
@@ -1471,6 +1541,109 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     <main>
         {content}
     </main>
+    <script>
+        // Notifications system
+        let notificationsOpen = false;
+        
+        function toggleNotifications() {{
+            const panel = document.getElementById('notificationsPanel');
+            notificationsOpen = !notificationsOpen;
+            
+            if (notificationsOpen) {{
+                panel.classList.add('active');
+                loadNotifications();
+            }} else {{
+                panel.classList.remove('active');
+            }}
+        }}
+        
+        function loadNotifications() {{
+            fetch('/api/my-requests')
+                .then(r => r.json())
+                .then(data => {{
+                    const panel = document.getElementById('notificationsPanel');
+                    
+                    if (data.requests.length === 0) {{
+                        panel.innerHTML = '<div style="padding: 40px; text-align: center; color: #666;">Уведомлений пока нет</div>';
+                        return;
+                    }}
+                    
+                    let html = '<div style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Запросы от HR</strong></div>';
+                    
+                    data.requests.forEach(req => {{
+                        let whatsappLink = '';
+                        if (req.whatsapp) {{
+                            const whatsappUrl = req.whatsapp.startsWith('http') ? req.whatsapp : 'https://wa.me/' + req.whatsapp;
+                            whatsappLink = '<a href="' + whatsappUrl + '" target="_blank" class="notification-link-btn">WhatsApp</a>';
+                        }}
+                        
+                        let instagramLink = '';
+                        if (req.instagram) {{
+                            const instagramUrl = req.instagram.startsWith('http') ? req.instagram : 'https://instagram.com/' + req.instagram;
+                            instagramLink = '<a href="' + instagramUrl + '" target="_blank" class="notification-link-btn">Instagram</a>';
+                        }}
+                        
+                        let linkedinLink = '';
+                        if (req.linkedin) {{
+                            linkedinLink = '<a href="' + req.linkedin + '" target="_blank" class="notification-link-btn">LinkedIn</a>';
+                        }}
+                        
+                        html += '<div class="notification-item">' +
+                            '<strong>' + req.hr_name + '</strong>' +
+                            '<p class="text-muted text-xs" style="margin: 4px 0 12px 0;">' + req.hr_headline + '</p>' +
+                            '<p class="text-sm" style="margin-bottom: 12px;">' + req.message + '</p>' +
+                            '<div class="notification-links">' +
+                                whatsappLink + instagramLink + linkedinLink +
+                                '<button class="dismiss-btn" onclick="dismissRequest(' + req.id + ')">Отменить</button>' +
+                            '</div>' +
+                            '<p class="text-muted text-xs" style="margin-top: 12px;">' + req.created_at + '</p>' +
+                        '</div>';
+                    }});
+                    
+                    panel.innerHTML = html;
+                }});
+        }}
+        
+        function dismissRequest(id) {{
+            if (!confirm('Отменить этот запрос?')) return;
+            
+            fetch('/api/dismiss-request/' + id, {{ method: 'POST' }})
+                .then(r => r.json())
+                .then(() => {{
+                    loadNotifications();
+                    updateNotificationCount();
+                }});
+        }}
+        
+        function updateNotificationCount() {{
+            fetch('/api/notifications-count')
+                .then(r => r.json())
+                .then(data => {{
+                    const badge = document.getElementById('notification-count');
+                    if (data.count > 0) {{
+                        badge.textContent = data.count;
+                        badge.classList.add('active');
+                    }} else {{
+                        badge.classList.remove('active');
+                    }}
+                }});
+        }}
+        
+        // Close notifications when clicking outside
+        document.addEventListener('click', function(event) {{
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown && !dropdown.contains(event.target)) {{
+                document.getElementById('notificationsPanel').classList.remove('active');
+                notificationsOpen = false;
+            }}
+        }});
+        
+        // Update count on page load
+        if (document.getElementById('notification-count')) {{
+            updateNotificationCount();
+            setInterval(updateNotificationCount, 30000); // Update every 30 seconds
+        }}
+    </script>
 </body>
 </html>"""
 
@@ -1613,8 +1786,77 @@ def register_page(error: str = "") -> str:
     return get_base_html("Регистрация", content)
 
 
+def hr_dashboard_page(user: User, db: Session) -> str:
+    """HR Dashboard - Russian only"""
+    lang = "ru"
+    
+    # Statistics for HR
+    total_candidates = db.query(User).filter(User.role == "candidate", User.resume_file != "").count()
+    my_requests = db.query(Request).filter(Request.hr_id == user.id).count()
+    
+    # Recent requests
+    recent_requests = db.query(Request).filter(
+        Request.hr_id == user.id
+    ).order_by(Request.created_at.desc()).limit(5).all()
+    
+    requests_html = ""
+    for req in recent_requests:
+        candidate = db.query(User).filter(User.id == req.candidate_id).first()
+        if candidate:
+            status_badge = "badge-success" if req.status == "viewed" else "badge-warning"
+            requests_html += f"""
+            <div style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>{candidate.full_name}</strong>
+                        <p class="text-muted text-xs" style="margin: 4px 0;">{req.created_at.strftime('%d.%m.%Y %H:%M')}</p>
+                    </div>
+                    <span class="{status_badge}">{req.status}</span>
+                </div>
+            </div>
+            """
+    
+    if not requests_html:
+        requests_html = '<p class="text-muted" style="padding: 20px; text-align: center;">Запросов пока нет</p>'
+    
+    content = f"""
+    <div class="container">
+        <div class="flex-between" style="margin-bottom: 48px;">
+            <div>
+                <h1>Панель HR-специалиста</h1>
+                <p class="text-muted">Добро пожаловать, {user.full_name}</p>
+            </div>
+            <a href="/candidates" class="btn btn-large">Найти кандидатов</a>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{total_candidates}</div>
+                <div class="stat-label">Кандидатов в базе</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{my_requests}</div>
+                <div class="stat-label">Моих запросов</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 24px;">Последние запросы</h3>
+            {requests_html}
+        </div>
+    </div>
+    """
+    return get_base_html("Панель HR", content, user)
+
+
 def dashboard_page(user: User, db: Session) -> str:
     """Dashboard page - Russian only"""
+    
+    # Route to HR or Candidate dashboard
+    if user.role == "hr":
+        return hr_dashboard_page(user, db)
+    
+    # Candidate dashboard
     lang = "ru"  # Always Russian
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
@@ -2068,6 +2310,8 @@ Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills
                 </div>
             </div>
             
+            {'<div class="card"><h3 style="margin-bottom: 20px;">Контакты для кандидатов</h3><p class="text-muted text-sm" style="margin-bottom: 16px;">Эти контакты будут видны кандидатам при отправке запроса</p><div class="form-group"><label class="form-label">WhatsApp</label><input type="text" name="whatsapp" class="form-control" value="' + (user.whatsapp or '') + '" placeholder="+77001234567 или https://wa.me/..."></div><div class="form-group"><label class="form-label">Instagram</label><input type="text" name="instagram" class="form-control" value="' + (user.instagram or '') + '" placeholder="username или ссылка"></div></div>' if user.role == "hr" else ''}
+            
             <button type="submit" class="btn btn-primary btn-block btn-large">Save Changes</button>
         </form>
     </div>
@@ -2368,6 +2612,157 @@ def result_page(user: User, analysis: Analysis) -> str:
     return get_base_html(t('analyze', lang), content, user)
 
 
+def candidates_search_page(user: User, db: Session, search_query: str = "") -> str:
+    """Candidates search page for HR"""
+    
+    # Search candidates
+    candidates_query = db.query(User).filter(User.role == "candidate")
+    
+    if search_query:
+        # Search by name or skills
+        candidates_query = candidates_query.filter(
+            (User.full_name.contains(search_query)) |
+            (User.skills.contains(search_query)) |
+            (User.headline.contains(search_query))
+        )
+    
+    candidates = candidates_query.limit(50).all()
+    
+    # Build candidates list
+    candidates_html = ""
+    for candidate in candidates:
+        avatar = f'<img src="/uploads/avatars/{candidate.avatar}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;">' if candidate.avatar else f'<div style="width: 60px; height: 60px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700;">{candidate.full_name[0].upper()}</div>'
+        
+        skills_preview = candidate.skills[:100] + "..." if len(candidate.skills) > 100 else candidate.skills
+        has_resume = "✅ Резюме загружено" if candidate.resume_file else "❌ Нет резюме"
+        
+        candidates_html += f"""
+        <div class="card" style="margin-bottom: 16px;">
+            <div style="display: flex; gap: 24px; align-items: start;">
+                {avatar}
+                <div style="flex: 1;">
+                    <h3 style="margin-bottom: 8px;">{candidate.full_name}</h3>
+                    <p class="text-muted" style="margin-bottom: 8px;">{candidate.headline or 'Кандидат'}</p>
+                    <p class="text-muted text-sm" style="margin-bottom: 12px;">📍 {candidate.location or 'Не указано'}</p>
+                    {f'<p class="text-sm" style="margin-bottom: 12px;"><strong>Навыки:</strong> {skills_preview}</p>' if candidate.skills else '<p class="text-muted text-sm">Навыки не указаны</p>'}
+                    <p class="text-xs text-muted">{has_resume}</p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="/candidate/{candidate.id}" class="btn btn-outline">Посмотреть профиль</a>
+                </div>
+            </div>
+        </div>
+        """
+    
+    if not candidates_html:
+        candidates_html = '<div class="card"><p class="text-muted" style="text-align: center; padding: 40px;">Кандидаты не найдены. Попробуйте другой запрос.</p></div>'
+    
+    content = f"""
+    <div class="container">
+        <h1 style="margin-bottom: 32px;">Поиск кандидатов</h1>
+        
+        <form method="GET" action="/candidates" style="margin-bottom: 32px;">
+            <div class="form-group">
+                <input type="text" name="q" class="form-control" placeholder="Поиск по имени, навыкам или должности..." value="{search_query}" style="font-size: 16px; padding: 16px;">
+                <p class="text-muted text-xs" style="margin-top: 8px;">Например: Python, React, Senior Developer</p>
+            </div>
+        </form>
+        
+        <p class="text-muted" style="margin-bottom: 24px;">Найдено кандидатов: {len(candidates)}</p>
+        
+        {candidates_html}
+    </div>
+    """
+    return get_base_html("Поиск кандидатов", content, user)
+
+
+def candidate_profile_view_page(candidate: User, hr_user: User, db: Session) -> str:
+    """View candidate profile (for HR)"""
+    
+    avatar = f'<img src="/uploads/avatars/{candidate.avatar}" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.2);">' if candidate.avatar else f'<div style="width: 120px; height: 120px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 700;">{candidate.full_name[0].upper()}</div>'
+    
+    # Check if already sent request
+    existing_request = db.query(Request).filter(
+        Request.hr_id == hr_user.id,
+        Request.candidate_id == candidate.id
+    ).first()
+    
+    request_section = ""
+    if existing_request:
+        request_section = f'''
+        <div class="card" style="background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);">
+            <p style="color: #22c55e; font-weight: 600;">✅ Запрос уже отправлен</p>
+            <p class="text-muted text-sm">Отправлено: {existing_request.created_at.strftime('%d.%m.%Y в %H:%M')}</p>
+            <p class="text-sm" style="margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px;">"{existing_request.message}"</p>
+        </div>
+        '''
+    else:
+        request_section = '''
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">Отправить запрос кандидату</h3>
+            <form method="POST" action="/send-request">
+                <input type="hidden" name="candidate_id" value="{id}">
+                <div class="form-group">
+                    <label class="form-label">Ваше сообщение</label>
+                    <textarea name="message" class="form-control" required placeholder="Здравствуйте! Мы ищем специалиста на позицию..." rows="5"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-large">Отправить запрос</button>
+            </form>
+        </div>
+        '''.format(id=candidate.id)
+    
+    resume_section = ""
+    if candidate.resume_file:
+        resume_section = f'''
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">📄 Резюме</h3>
+            <div style="display: flex; gap: 12px;">
+                <a href="/view-resume/{candidate.id}" class="btn btn-outline" target="_blank">Открыть резюме</a>
+                <a href="/download-resume?user_id={candidate.id}" class="btn btn-outline">Скачать</a>
+            </div>
+        </div>
+        '''
+    
+    content = f"""
+    <div class="container">
+        <div style="margin-bottom: 32px;">
+            <a href="/candidates" class="btn btn-outline">← Назад к поиску</a>
+        </div>
+        
+        <div class="card">
+            <div style="display: flex; gap: 32px; align-items: start;">
+                {avatar}
+                <div style="flex: 1;">
+                    <h1 style="margin-bottom: 8px;">{candidate.full_name}</h1>
+                    <p class="text-muted" style="margin-bottom: 16px; font-size: 18px;">{candidate.headline or 'Кандидат'}</p>
+                    <p class="text-muted">📍 {candidate.location or 'Местоположение не указано'}</p>
+                </div>
+            </div>
+        </div>
+        
+        {f'<div class="card"><h3>О себе</h3><p style="margin-top: 16px; line-height: 1.8;">{candidate.bio}</p></div>' if candidate.bio else ''}
+        
+        {f'''<div class="card">
+            <h3 style="margin-bottom: 16px;">Навыки</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                {"".join([f'<span class="badge badge-success">{skill.strip()}</span>' for skill in candidate.skills.replace(",", "\\n").split("\\n") if skill.strip()])}
+            </div>
+        </div>''' if candidate.skills else ''}
+        
+        {f'''<div class="card">
+            <h3 style="margin-bottom: 16px;">Контакты</h3>
+            <p><strong>Email:</strong> {candidate.email}</p>
+            {f'<p style="margin-top: 8px;"><strong>Телефон:</strong> {candidate.phone}</p>' if candidate.phone else ''}
+        </div>''' if candidate.email or candidate.phone else ''}
+        
+        {resume_section}
+        
+        {request_section}
+    </div>
+    """
+    return get_base_html(f"Профиль: {candidate.full_name}", content, hr_user)
+
+
 # ============================================================================
 # FASTAPI APP & ROUTES
 # ============================================================================
@@ -2522,6 +2917,8 @@ async def update_profile(
     linkedin_url: str = Form(""),
     github_url: str = Form(""),
     website: str = Form(""),
+    whatsapp: str = Form(""),
+    instagram: str = Form(""),
     user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
@@ -2535,6 +2932,11 @@ async def update_profile(
     user.linkedin_url = linkedin_url
     user.github_url = github_url
     user.website = website
+    
+    # HR-specific fields
+    if user.role == "hr":
+        user.whatsapp = whatsapp
+        user.instagram = instagram
     
     db.commit()
     
@@ -2716,6 +3118,167 @@ async def result_detail(
         raise HTTPException(status_code=404, detail="Analysis not found")
     
     return result_page(user, analysis)
+
+
+# ============================================================================
+# HR-SPECIFIC ROUTES
+# ============================================================================
+
+@app.get("/candidates", response_class=HTMLResponse)
+async def candidates_search(
+    q: str = "",
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Search candidates page (HR only)"""
+    if user.role != "hr":
+        raise HTTPException(status_code=403, detail="HR only")
+    return candidates_search_page(user, db, q)
+
+
+@app.get("/candidate/{candidate_id}", response_class=HTMLResponse)
+async def view_candidate(
+    candidate_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """View candidate profile (HR only)"""
+    if user.role != "hr":
+        raise HTTPException(status_code=403, detail="HR only")
+    
+    candidate = db.query(User).filter(User.id == candidate_id).first()
+    if not candidate or candidate.role != "candidate":
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    return candidate_profile_view_page(candidate, user, db)
+
+
+@app.post("/send-request")
+async def send_request_post(
+    candidate_id: int = Form(...),
+    message: str = Form(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Send request to candidate (HR only)"""
+    if user.role != "hr":
+        raise HTTPException(status_code=403, detail="HR only")
+    
+    existing = db.query(Request).filter(
+        Request.hr_id == user.id,
+        Request.candidate_id == candidate_id
+    ).first()
+    
+    if existing:
+        return RedirectResponse(f"/candidate/{candidate_id}", status_code=303)
+    
+    request = Request(
+        hr_id=user.id,
+        candidate_id=candidate_id,
+        message=message,
+        status="pending"
+    )
+    db.add(request)
+    db.commit()
+    
+    return RedirectResponse(f"/candidate/{candidate_id}", status_code=303)
+
+
+@app.get("/view-resume/{user_id}")
+async def view_resume(
+    user_id: int,
+    current_user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """View resume in browser"""
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user or not target_user.resume_file:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    
+    if current_user.role != "hr" and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    file_path = Config.UPLOAD_DIR / "resumes" / target_user.resume_file
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path)
+
+
+# ============================================================================
+# API ROUTES
+# ============================================================================
+
+@app.get("/api/notifications-count")
+async def get_notifications_count(
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Get unread notifications count"""
+    if user.role != "candidate":
+        return {"count": 0}
+    
+    count = db.query(Request).filter(
+        Request.candidate_id == user.id,
+        Request.status == "pending"
+    ).count()
+    return {"count": count}
+
+
+@app.get("/api/my-requests")
+async def get_my_requests(
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Get my requests"""
+    if user.role != "candidate":
+        return {"requests": []}
+    
+    requests = db.query(Request).filter(
+        Request.candidate_id == user.id
+    ).order_by(Request.created_at.desc()).all()
+    
+    result = []
+    for req in requests:
+        hr = db.query(User).filter(User.id == req.hr_id).first()
+        if hr:
+            result.append({
+                "id": req.id,
+                "hr_name": hr.full_name,
+                "hr_headline": hr.headline or "HR-специалист",
+                "message": req.message,
+                "status": req.status,
+                "created_at": req.created_at.strftime("%d.%m.%Y %H:%M"),
+                "whatsapp": hr.whatsapp,
+                "instagram": hr.instagram,
+                "linkedin": hr.linkedin_url
+            })
+    
+    return {"requests": result}
+
+
+@app.post("/api/dismiss-request/{request_id}")
+async def dismiss_request(
+    request_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Dismiss request"""
+    if user.role != "candidate":
+        raise HTTPException(status_code=403)
+    
+    request = db.query(Request).filter(
+        Request.id == request_id,
+        Request.candidate_id == user.id
+    ).first()
+    
+    if not request:
+        raise HTTPException(status_code=404)
+    
+    db.delete(request)
+    db.commit()
+    return {"success": True}
 
 
 @app.get("/api/health")
