@@ -90,6 +90,9 @@ class User(Base):
     avatar = Column(String, default="")  # Path to avatar image
     resume_file = Column(String, default="")  # Path to uploaded resume
     
+    # Skills (manually entered for accurate matching)
+    skills = Column(Text, default="")  # Comma-separated or structured text
+    
     # Social links
     linkedin_url = Column(String, default="")
     github_url = Column(String, default="")
@@ -206,13 +209,26 @@ def parse_resume(filename: str, file_content: bytes) -> str:
         return "[Unsupported file format]"
 
 
-async def compare_resume_with_job(resume_text: str, job_description: str) -> Dict[str, Any]:
+async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "") -> Dict[str, Any]:
     """Compare resume with job description using Ollama"""
+    
+    skills_section = ""
+    if candidate_skills:
+        skills_section = f"""
+
+CANDIDATE'S CONFIRMED SKILLS:
+{candidate_skills}
+
+IMPORTANT: These are the skills the candidate has explicitly confirmed they possess. 
+Use these as the PRIMARY SOURCE when evaluating skills match.
+Only mark skills as "matched" if they appear in this confirmed skills list.
+If a skill is in the resume but NOT in the confirmed skills list, be cautious."""
     
     prompt = f"""Compare this resume with the job description and provide detailed analysis in JSON format.
 
 RESUME:
 {resume_text}
+{skills_section}
 
 JOB DESCRIPTION:
 {job_description}
@@ -1198,6 +1214,15 @@ def profile_page(user: User, db: Session) -> str:
             
             <!-- Right Column -->
             <div>
+                <!-- Skills Section -->
+                <div class="card">
+                    <div class="flex-between" style="margin-bottom: 20px;">
+                        <h3>Skills</h3>
+                        <a href="/edit-profile#skills" class="btn btn-outline" style="padding: 6px 16px;">Edit</a>
+                    </div>
+                    {f'<div class="skills-list">{" ".join([f"<span class=\"skill-tag\">{skill.strip()}</span>" for skill in user.skills.replace(",", "\n").split("\n") if skill.strip()])}</div>' if user.skills else '<p class="text-muted">Add your skills for more accurate job matching. <a href="/edit-profile" style="color: var(--white); text-decoration: underline;">Add skills</a></p>'}
+                </div>
+                
                 <!-- Resume Section -->
                 <div class="card">
                     <div class="flex-between" style="margin-bottom: 20px;">
@@ -1350,6 +1375,22 @@ def profile_page(user: User, db: Session) -> str:
         color: rgba(255,255,255,0.6);
         font-size: 14px;
     }}
+    
+    .skills-list {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }}
+    
+    .skill-tag {{
+        display: inline-block;
+        padding: 6px 12px;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--white);
+    }}
     </style>
     """
     return get_base_html("Profile", content, user)
@@ -1412,6 +1453,25 @@ def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
                 </div>
             </div>
             
+            <!-- Skills Section -->
+            <div class="card" id="skills">
+                <h3 style="margin-bottom: 20px;">Skills</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 16px;">Add your actual skills for more accurate job matching. Be honest!</p>
+                
+                <div class="form-group">
+                    <label class="form-label">Your Skills</label>
+                    <textarea name="skills" class="form-control" placeholder="Enter your skills (one per line or comma-separated):
+
+Examples:
+React.js, Node.js, TypeScript
+Python, Django, FastAPI
+HTML, CSS, JavaScript, Bootstrap
+Git, Docker, Kubernetes
+Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills or ''}</textarea>
+                    <p class="text-muted text-xs" style="margin-top: 8px;">💡 These skills will be used for accurate job matching. Only add skills you truly possess.</p>
+                </div>
+            </div>
+            
             <!-- Contact Information -->
             <div class="card">
                 <h3 style="margin-bottom: 20px;">Contact Information</h3>
@@ -1455,44 +1515,86 @@ def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
     return get_base_html("Edit Profile", content, user)
 
 
-def upload_resume_profile_page(user: User, error: str = "") -> str:
+def upload_resume_profile_page(user: User, error: str = "", show_skills_form: bool = False) -> str:
     """Upload resume to profile page"""
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
-    content = f"""
-    <div class="container-sm">
-        <div style="margin-bottom: 32px;">
-            <a href="/profile" class="btn btn-outline">← Back to Profile</a>
-        </div>
-        
-        <h1>Upload Resume</h1>
-        <p class="text-muted" style="margin-bottom: 32px;">Upload your resume to your profile for quick job matching</p>
-        
-        {error_html}
-        
-        <div class="card">
-            <form method="POST" action="/upload-resume-profile" enctype="multipart/form-data">
-                <div class="file-upload" onclick="document.getElementById('resume-input').click();">
-                    <div class="file-icon">📄</div>
-                    <input type="file" id="resume-input" name="resume" accept=".pdf,.docx,.doc" required onchange="updateResumeFileName(this)">
-                    <p id="resume-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Click to upload your resume</p>
-                    <p class="text-muted text-xs">PDF or DOCX, max 10MB</p>
-                </div>
+    # Show skills form after upload
+    if show_skills_form:
+        content = f"""
+        <div class="container-sm">
+            <div class="alert alert-success">✅ Resume uploaded successfully!</div>
+            
+            <h1>Add Your Skills</h1>
+            <p class="text-muted" style="margin-bottom: 32px;">Help us match you accurately by listing your real skills. This makes job matching more precise!</p>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">Why add skills?</h3>
+                <ul style="margin-left: 20px; margin-bottom: 24px; color: rgba(255,255,255,0.7);">
+                    <li style="margin-bottom: 8px;">✓ More accurate job matching</li>
+                    <li style="margin-bottom: 8px;">✓ AI will know exactly what you can do</li>
+                    <li style="margin-bottom: 8px;">✓ Better analysis results</li>
+                    <li style="margin-bottom: 8px;">✓ Avoid false positives</li>
+                </ul>
                 
-                <button type="submit" class="btn btn-primary btn-block btn-large" style="margin-top: 24px;">Upload Resume</button>
-            </form>
+                <form method="POST" action="/update-skills">
+                    <div class="form-group">
+                        <label class="form-label">Your Skills (Optional but Recommended)</label>
+                        <textarea name="skills" class="form-control" placeholder="Enter your skills, one per line or comma-separated:
+
+Example:
+React.js, Node.js, TypeScript
+Python, Django, FastAPI
+HTML, CSS, JavaScript
+Git, Docker, AWS
+Problem Solving, Team Leadership">{user.skills or ''}</textarea>
+                        <p class="text-muted text-xs" style="margin-top: 8px;">Be honest! Only add skills you actually have. This ensures accurate matching.</p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button type="submit" class="btn btn-primary btn-large" style="flex: 1;">Save Skills</button>
+                        <a href="/profile" class="btn btn-outline btn-large" style="flex: 1; display: flex; align-items: center; justify-content: center; text-decoration: none;">Skip for Now</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        """
+    else:
+        content = f"""
+        <div class="container-sm">
+            <div style="margin-bottom: 32px;">
+                <a href="/profile" class="btn btn-outline">← Back to Profile</a>
+            </div>
+            
+            <h1>Upload Resume</h1>
+            <p class="text-muted" style="margin-bottom: 32px;">Upload your resume to your profile for quick job matching</p>
+            
+            {error_html}
+            
+            <div class="card">
+                <form method="POST" action="/upload-resume-profile" enctype="multipart/form-data">
+                    <div class="file-upload" onclick="document.getElementById('resume-input').click();">
+                        <div class="file-icon">📄</div>
+                        <input type="file" id="resume-input" name="resume" accept=".pdf,.docx,.doc" required onchange="updateResumeFileName(this)">
+                        <p id="resume-name" style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">Click to upload your resume</p>
+                        <p class="text-muted text-xs">PDF or DOCX, max 10MB</p>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block btn-large" style="margin-top: 24px;">Upload Resume</button>
+                </form>
+            </div>
+            
+            {f'<div class="card"><h3>Current Resume</h3><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="margin-top: 12px;">Download Current Resume</a></div>' if user.resume_file else ''}
         </div>
         
-        {f'<div class="card"><h3>Current Resume</h3><p>📄 {user.resume_file.split("/")[-1] if "/" in user.resume_file else user.resume_file}</p><a href="/download-resume" class="btn btn-outline" style="margin-top: 12px;">Download Current Resume</a></div>' if user.resume_file else ''}
-    </div>
+        <script>
+        function updateResumeFileName(input) {{
+            const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Click to upload your resume';
+            document.getElementById('resume-name').textContent = fileName;
+        }}
+        </script>
+        """
     
-    <script>
-    function updateResumeFileName(input) {{
-        const fileName = (input.files && input.files[0]) ? input.files[0].name : 'Click to upload your resume';
-        document.getElementById('resume-name').textContent = fileName;
-    }}
-    </script>
-    """
     return get_base_html("Upload Resume", content, user)
 
 
@@ -1520,6 +1622,19 @@ def analyze_page(user: User, error: str = "") -> str:
                 </div>
             </div>
             
+            {f'''<div class="card" style="background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.15);">
+                <h3 style="margin-bottom: 16px;">💡 Use Your Profile Skills</h3>
+                <p class="text-muted text-sm" style="margin-bottom: 16px;">You have {len([s for s in user.skills.replace(",", "\\n").split("\\n") if s.strip()])} skills in your profile. Use them for more accurate matching!</p>
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                    <input type="checkbox" name="use_profile_skills" value="yes" checked style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="flex: 1;">
+                        <strong>Use my profile skills for accurate matching</strong><br>
+                        <span class="text-muted text-xs">AI will only match skills you've confirmed in your profile</span>
+                    </span>
+                </label>
+                <p class="text-muted text-xs" style="margin-top: 12px;">Don't have skills in profile? <a href="/edit-profile#skills" style="color: var(--white); text-decoration: underline;">Add them now</a></p>
+            </div>''' if user.skills else ''}
+            
             <div class="card">
                 <h3>2. Job Description</h3>
                 <p class="text-muted text-sm" style="margin-bottom: 24px;">Paste the complete job posting including all requirements</p>
@@ -1545,7 +1660,7 @@ Responsibilities:
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-block btn-large">Analyze Match</button>
+            <button type="submit" class="btn btn-primary btn-block btn-large">Analyze Match</button>
         </form>
     </div>
     
@@ -1835,6 +1950,7 @@ async def update_profile(
     location: str = Form(""),
     bio: str = Form(""),
     phone: str = Form(""),
+    skills: str = Form(""),
     linkedin_url: str = Form(""),
     github_url: str = Form(""),
     website: str = Form(""),
@@ -1847,10 +1963,24 @@ async def update_profile(
     user.location = location
     user.bio = bio
     user.phone = phone
+    user.skills = skills
     user.linkedin_url = linkedin_url
     user.github_url = github_url
     user.website = website
     
+    db.commit()
+    
+    return RedirectResponse(url="/profile", status_code=302)
+
+
+@app.post("/update-skills")
+async def update_skills(
+    skills: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Update user skills"""
+    user.skills = skills
     db.commit()
     
     return RedirectResponse(url="/profile", status_code=302)
@@ -1922,7 +2052,8 @@ async def upload_resume_profile_post(
     user.resume_file = filename
     db.commit()
     
-    return RedirectResponse(url="/profile", status_code=302)
+    # Show skills form after upload
+    return HTMLResponse(upload_resume_profile_page(user, show_skills_form=True))
 
 
 @app.get("/download-resume")
@@ -1962,6 +2093,7 @@ async def analyze_get(user: User = Depends(require_auth)):
 async def analyze_post(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    use_profile_skills: str = Form("no"),
     user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
@@ -1976,7 +2108,13 @@ async def analyze_post(
         f.write(file_content)
     
     resume_text = parse_resume(file.filename, file_content)
-    analysis_data = await compare_resume_with_job(resume_text, job_description)
+    
+    # Use profile skills if requested
+    candidate_skills = ""
+    if use_profile_skills == "yes" and user.skills:
+        candidate_skills = user.skills
+    
+    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills)
     
     analysis = Analysis(
         user_id=user.id,
