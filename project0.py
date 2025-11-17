@@ -5,8 +5,7 @@ Using Ollama GLM-4.6:cloud model
 """
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
@@ -17,9 +16,6 @@ import time
 from datetime import datetime
 
 app = FastAPI(title="Project-0", description="Powerful AI Coding Platform")
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS middleware
 app.add_middleware(
@@ -138,10 +134,10 @@ async def generate_ai_response(messages: List[Dict], session_id: str) -> AsyncGe
         error_msg = f"Error: {str(e)}"
         yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application UI"""
-    return FileResponse("static/index.html")
+    return HTML_TEMPLATE
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
@@ -174,6 +170,599 @@ async def health():
         "timestamp": datetime.now().isoformat(),
         "model": MODEL_NAME
     }
+
+# Embedded HTML/CSS/JS - ALL IN ONE FILE
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project-0 - Powerful AI Coding Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+            background: #000000;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: #000000;
+            border-bottom: 1px solid #333;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #ffffff 0%, #888888 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            color: #000;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 24px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .message-role {
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .user-role {
+            color: #ffffff;
+        }
+
+        .assistant-role {
+            color: #888888;
+        }
+
+        .message-content {
+            padding: 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .user-message .message-content {
+            background: #1a1a1a;
+            border: 1px solid #333;
+        }
+
+        .assistant-message .message-content {
+            background: #0a0a0a;
+            border: 1px solid #222;
+        }
+
+        .thinking-indicator {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        pre {
+            background: #0d0d0d;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+
+        .input-area {
+            padding: 24px;
+            background: #000000;
+            border-top: 1px solid #333;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 12px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 16px 60px 16px 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+            min-height: 56px;
+            max-height: 200px;
+        }
+
+        #messageInput:focus {
+            border-color: #666;
+        }
+
+        #messageInput::placeholder {
+            color: #666;
+        }
+
+        #sendButton {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 36px;
+            height: 36px;
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        #sendButton:hover:not(:disabled) {
+            background: #e0e0e0;
+            transform: translateY(-1px);
+        }
+
+        #sendButton:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        .loading {
+            display: inline-block;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .welcome-logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #ffffff 0%, #888888 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 36px;
+            color: #000;
+            margin-bottom: 24px;
+        }
+
+        .welcome-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .welcome-subtitle {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 32px;
+            max-width: 500px;
+        }
+
+        .example-prompts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .example-prompt {
+            padding: 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .example-prompt:hover {
+            background: #222;
+            border-color: #666;
+            transform: translateY(-2px);
+        }
+
+        .example-prompt-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .example-prompt-text {
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">0</div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>GLM-4.6 Ready</span>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="welcome">
+                    <div class="welcome-logo">0</div>
+                    <div class="welcome-title">Welcome to Project-0</div>
+                    <div class="welcome-subtitle">
+                        The most powerful AI coding platform. Create anything from a simple script to a full-stack application. 
+                        Just describe what you want to build.
+                    </div>
+                    <div class="example-prompts">
+                        <div class="example-prompt" data-text="Create a full-stack todo app with React and Node.js">
+                            <div class="example-prompt-title">🚀 Full-Stack App</div>
+                            <div class="example-prompt-text">Create a complete application</div>
+                        </div>
+                        <div class="example-prompt" data-text="Build a REST API with authentication and database">
+                            <div class="example-prompt-title">🔧 REST API</div>
+                            <div class="example-prompt-text">Backend with auth & DB</div>
+                        </div>
+                        <div class="example-prompt" data-text="Design a modern landing page with animations">
+                            <div class="example-prompt-title">🎨 UI Design</div>
+                            <div class="example-prompt-text">Beautiful frontend page</div>
+                        </div>
+                        <div class="example-prompt" data-text="Create a Python script for data analysis with pandas">
+                            <div class="example-prompt-title">📊 Data Script</div>
+                            <div class="example-prompt-text">Analysis & visualization</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="messageInput" 
+                            placeholder="Describe what you want to build... (Shift+Enter for new line)"
+                            rows="1"
+                        ></textarea>
+                        <button id="sendButton">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var isProcessing = false;
+        var messageHistory = [];
+        var messageInput = document.getElementById('messageInput');
+        var sendButton = document.getElementById('sendButton');
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Handle Enter key
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Send button click
+        sendButton.addEventListener('click', sendMessage);
+
+        // Example prompts click handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            var examplePrompts = document.querySelectorAll('.example-prompt');
+            examplePrompts.forEach(function(prompt) {
+                prompt.addEventListener('click', function() {
+                    var text = this.getAttribute('data-text');
+                    messageInput.value = text;
+                    messageInput.focus();
+                    messageInput.style.height = 'auto';
+                    messageInput.style.height = messageInput.scrollHeight + 'px';
+                });
+            });
+        });
+
+        function sendMessage() {
+            var input = document.getElementById('messageInput');
+            var message = input.value.trim();
+            
+            if (!message || isProcessing) return;
+            
+            isProcessing = true;
+            sendButton.disabled = true;
+            
+            input.value = '';
+            input.style.height = 'auto';
+            
+            var welcome = document.querySelector('.welcome');
+            if (welcome) {
+                welcome.remove();
+            }
+            
+            addMessage('user', message);
+            messageHistory.push({role: 'user', content: message});
+            
+            var messagesDiv = document.getElementById('messages');
+            var assistantDiv = document.createElement('div');
+            assistantDiv.className = 'message assistant-message';
+            assistantDiv.innerHTML = '<div class="message-header"><span class="message-role assistant-role">Project-0</span></div><div class="thinking-indicator"><span class="loading">Thinking</span></div><div class="message-content" id="currentResponse"></div>';
+            messagesDiv.appendChild(assistantDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({messages: messageHistory, stream: true})
+            })
+            .then(function(response) {
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var fullResponse = '';
+                
+                function readStream() {
+                    reader.read().then(function(result) {
+                        if (result.done) {
+                            isProcessing = false;
+                            sendButton.disabled = false;
+                            input.focus();
+                            return;
+                        }
+                        
+                        var chunk = decoder.decode(result.value);
+                        var lines = chunk.split('\\n');
+                        
+                        for (var i = 0; i < lines.length; i++) {
+                            var line = lines[i];
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    var data = JSON.parse(line.slice(6));
+                                    
+                                    if (data.type === 'thinking') {
+                                        var thinkingDiv = assistantDiv.querySelector('.thinking-indicator');
+                                        if (thinkingDiv) {
+                                            thinkingDiv.textContent = data.content;
+                                        }
+                                    } else if (data.type === 'content') {
+                                        var thinkingDiv = assistantDiv.querySelector('.thinking-indicator');
+                                        if (thinkingDiv) {
+                                            thinkingDiv.remove();
+                                        }
+                                        
+                                        fullResponse += data.content;
+                                        var responseDiv = document.getElementById('currentResponse');
+                                        responseDiv.innerHTML = formatMessage(fullResponse);
+                                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                                    } else if (data.type === 'done') {
+                                        messageHistory.push({role: 'assistant', content: fullResponse});
+                                    } else if (data.type === 'error') {
+                                        var responseDiv = document.getElementById('currentResponse');
+                                        responseDiv.innerHTML = '<span style="color: #ff4444;">' + data.content + '</span>';
+                                    }
+                                } catch (e) {
+                                    console.error('Parse error:', e);
+                                }
+                            }
+                        }
+                        
+                        readStream();
+                    });
+                }
+                
+                readStream();
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                var responseDiv = document.getElementById('currentResponse');
+                responseDiv.innerHTML = '<span style="color: #ff4444;">Error: ' + error.message + '</span>';
+                isProcessing = false;
+                sendButton.disabled = false;
+                input.focus();
+            });
+        }
+
+        function addMessage(role, content) {
+            var messagesDiv = document.getElementById('messages');
+            var messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role + '-message';
+            
+            var roleLabel = role === 'user' ? 'You' : 'Project-0';
+            var roleClass = role === 'user' ? 'user-role' : 'assistant-role';
+            
+            messageDiv.innerHTML = '<div class="message-header"><span class="message-role ' + roleClass + '">' + roleLabel + '</span></div><div class="message-content">' + formatMessage(content) + '</div>';
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function formatMessage(content) {
+            content = content.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, function(match, lang, code) {
+                return '<pre><code>' + escapeHtml(code.trim()) + '</code></pre>';
+            });
+            
+            content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
+            content = content.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+            content = content.replace(/\\n/g, '<br>');
+            
+            return content;
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        window.addEventListener('load', function() {
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html>"""
 
 if __name__ == "__main__":
     import uvicorn
