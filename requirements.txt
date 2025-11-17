@@ -1,4 +1,4 @@
-# Project-0 Dependencies - ALL IN ONE FILE!
+# Project-0 MVP Generator Dependencies
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 httpx==0.26.0
