@@ -60,6 +60,7 @@ def init_db():
         description TEXT,
         context TEXT,
         files TEXT,
+        chat_history TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -70,6 +71,7 @@ def init_db():
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )''')
     
@@ -98,24 +100,50 @@ class ChatRequest(BaseModel):
 
 # Helper functions
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Secure password hashing with salt"""
+    salt = "project0_secure_salt_2024"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
 
 def create_session(user_id: int) -> str:
-    token = secrets.token_urlsafe(32)
+    """Create secure session token"""
+    token = secrets.token_urlsafe(48)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
+    expires = datetime.now().timestamp() + (7 * 24 * 60 * 60)  # 7 days
+    c.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", 
+              (token, user_id, expires))
     conn.commit()
     conn.close()
     return token
 
 def get_user_from_token(token: str) -> Optional[int]:
+    """Validate session token"""
+    if not token:
+        return None
+    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT user_id FROM sessions WHERE token = ?", (token,))
+    c.execute("SELECT user_id, expires_at FROM sessions WHERE token = ?", (token,))
     result = c.fetchone()
     conn.close()
-    return result[0] if result else None
+    
+    if not result:
+        return None
+    
+    user_id, expires_at = result
+    if expires_at and datetime.now().timestamp() > float(expires_at):
+        # Token expired
+        return None
+    
+    return user_id
+
+def delete_session(token: str):
+    """Delete session on logout"""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
 
 # Enhanced System Prompt for Project Context
 def get_system_prompt(project_context: str = "") -> str:
@@ -158,10 +186,10 @@ Architecture Standards:
 - Security best practices
 
 Color Schemes (choose appropriate):
-- Professional Blue: #2563eb, #3b82f6, #60a5fa
-- Success Green: #10b981, #34d399, #6ee7b7
-- Modern Purple: #8b5cf6, #a78bfa, #c4b5fd
-- Warm Orange: #f59e0b, #fbbf24, #fcd34d
+- Professional Blue: #0066FF, #0052CC, #0047B3
+- Success Green: #00C853, #00E676, #69F0AE
+- Modern Purple: #6200EA, #7C4DFF, #B388FF
+- Warm Orange: #FF6D00, #FF9100, #FFAB40
 
 Response Format:
 Generate ALL files with proper structure:
@@ -265,12 +293,18 @@ async def login(req: LoginRequest):
     token = create_session(user[0])
     return {"success": True, "token": token, "user": {"id": user[0], "name": user[1], "email": user[2]}}
 
+@app.post("/api/logout")
+async def logout(token: str):
+    """Logout user"""
+    delete_session(token)
+    return {"success": True}
+
 @app.get("/api/projects")
 async def get_projects(token: str):
     """Get user projects"""
     user_id = get_user_from_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -287,12 +321,13 @@ async def create_project(req: ProjectCreate, token: str):
     """Create new project"""
     user_id = get_user_from_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO projects (user_id, name, description, context) VALUES (?, ?, ?, ?)",
-             (user_id, req.name, req.description, ""))
+    chat_history = json.dumps([])
+    c.execute("INSERT INTO projects (user_id, name, description, context, chat_history) VALUES (?, ?, ?, ?, ?)",
+             (user_id, req.name, req.description, "", chat_history))
     conn.commit()
     project_id = c.lastrowid
     conn.close()
@@ -301,14 +336,14 @@ async def create_project(req: ProjectCreate, token: str):
 
 @app.get("/api/project/{project_id}")
 async def get_project(project_id: int, token: str):
-    """Get project details"""
+    """Get project details with chat history"""
     user_id = get_user_from_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, name, description, context, files FROM projects WHERE id = ? AND user_id = ?",
+    c.execute("SELECT id, name, description, context, files, chat_history FROM projects WHERE id = ? AND user_id = ?",
              (project_id, user_id))
     project = c.fetchone()
     conn.close()
@@ -317,12 +352,15 @@ async def get_project(project_id: int, token: str):
         raise HTTPException(status_code=404, detail="Project not found")
     
     files = json.loads(project[4]) if project[4] else {}
+    chat_history = json.loads(project[5]) if project[5] else []
+    
     return {
         "id": project[0],
         "name": project[1],
         "description": project[2],
         "context": project[3],
-        "files": files
+        "files": files,
+        "chat_history": chat_history
     }
 
 @app.post("/api/chat")
@@ -330,12 +368,12 @@ async def chat(req: ChatRequest, token: str):
     """Chat with AI about project"""
     user_id = get_user_from_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     # Get project context
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT context, description FROM projects WHERE id = ? AND user_id = ?",
+    c.execute("SELECT context, description, chat_history FROM projects WHERE id = ? AND user_id = ?",
              (req.project_id, user_id))
     project = c.fetchone()
     conn.close()
@@ -398,12 +436,28 @@ async def generate_mvp_stream(message: str, project_id: int, user_id: int, conte
                                 # Extract files and update project
                                 files = extract_project_files(full_response)
                                 
-                                # Update project context and files
+                                # Save chat history
                                 conn = sqlite3.connect(DB_FILE)
                                 c = conn.cursor()
+                                c.execute("SELECT chat_history FROM projects WHERE id = ?", (project_id,))
+                                history_json = c.fetchone()[0]
+                                history = json.loads(history_json) if history_json else []
+                                
+                                history.append({
+                                    "role": "user",
+                                    "content": message,
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                                history.append({
+                                    "role": "assistant",
+                                    "content": full_response,
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                                
+                                # Update project context and files
                                 new_context = context + f"\n\nUser: {message}\nAI: Generated files successfully."
-                                c.execute("UPDATE projects SET context = ?, files = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                                         (new_context, json.dumps(files), project_id))
+                                c.execute("UPDATE projects SET context = ?, files = ?, chat_history = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                         (new_context, json.dumps(files), json.dumps(history), project_id))
                                 conn.commit()
                                 conn.close()
                                 
@@ -427,7 +481,7 @@ def extract_project_files(markdown_text: str) -> Dict[str, str]:
         filename = filename.strip()
         files[filename] = code.strip()
     
-    # Add start script
+    # Add start scripts
     files["start.sh"] = "#!/bin/bash\ncd backend\nnpm install\nnpm start"
     files["start.bat"] = "@echo off\ncd backend\nnpm install\nnpm start"
     
@@ -438,7 +492,7 @@ async def download_project(project_id: int, token: str):
     """Download project as ZIP"""
     user_id = get_user_from_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     # Get project
     conn = sqlite3.connect(DB_FILE)
@@ -476,7 +530,7 @@ async def health():
     """Health check"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# Main HTML Template with Landing, Auth, Dashboard, and Chat
+# Main HTML Template with Resizable Panels, History, and Modern Design
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -493,19 +547,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         :root {
-            --bg-primary: #000000;
-            --bg-secondary: #0a0a0a;
-            --bg-tertiary: #1a1a1a;
-            --border-color: #2a2a2a;
-            --text-primary: #ffffff;
-            --text-secondary: #a0a0a0;
-            --text-tertiary: #666666;
-            --accent-primary: #2563eb;
-            --accent-secondary: #3b82f6;
-            --accent-light: #60a5fa;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
+            --bg-primary: #0A0A0F;
+            --bg-secondary: #13131A;
+            --bg-tertiary: #1A1A24;
+            --bg-hover: #20202C;
+            --border-color: #2A2A38;
+            --border-hover: #3A3A48;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B4B4C8;
+            --text-tertiary: #7878A0;
+            --accent-primary: #0066FF;
+            --accent-secondary: #0052CC;
+            --accent-light: #3385FF;
+            --accent-glow: rgba(0, 102, 255, 0.2);
+            --success: #00C853;
+            --warning: #FF9100;
+            --error: #FF1744;
+            --gradient-blue: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --shadow-accent: 0 4px 20px var(--accent-glow);
         }
 
         body {
@@ -513,6 +575,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
+            overflow-x: hidden;
         }
 
         /* Hide all pages by default */
@@ -532,35 +595,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .landing-nav {
-            padding: 24px 48px;
+            padding: 20px 48px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
         }
 
         .logo-container {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
         }
 
         .logo {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border-radius: 12px;
+            width: 44px;
+            height: 44px;
+            background: var(--gradient-blue);
+            border-radius: 11px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 28px;
+            font-size: 24px;
             color: white;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
+            box-shadow: var(--shadow-accent);
         }
 
         .logo-text {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
             -webkit-background-clip: text;
@@ -568,21 +636,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .nav-actions button {
-            padding: 12px 28px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            padding: 11px 26px;
+            background: var(--gradient-blue);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 9px;
             font-weight: 600;
-            font-size: 15px;
+            font-size: 14px;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-accent);
         }
 
         .nav-actions button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            box-shadow: 0 6px 24px var(--accent-glow);
         }
 
         .landing-hero {
@@ -591,82 +659,87 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 80px 48px;
+            padding: 100px 48px;
             text-align: center;
+            background: radial-gradient(ellipse at top, rgba(0, 102, 255, 0.1) 0%, transparent 50%);
         }
 
         .hero-title {
-            font-size: 72px;
+            font-size: 68px;
             font-weight: 900;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             line-height: 1.1;
+            letter-spacing: -0.02em;
         }
 
         .hero-subtitle {
-            font-size: 24px;
+            font-size: 22px;
             color: var(--text-secondary);
-            margin-bottom: 48px;
-            max-width: 700px;
+            margin-bottom: 44px;
+            max-width: 680px;
             font-weight: 400;
+            line-height: 1.5;
         }
 
         .hero-cta {
-            padding: 18px 48px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            padding: 16px 44px;
+            background: var(--gradient-blue);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 11px;
             font-weight: 700;
-            font-size: 18px;
+            font-size: 17px;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-accent);
         }
 
         .hero-cta:hover {
             transform: translateY(-3px);
-            box-shadow: 0 12px 32px rgba(37, 99, 235, 0.5);
+            box-shadow: 0 8px 32px var(--accent-glow);
         }
 
         .features {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 32px;
-            max-width: 1200px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 28px;
+            max-width: 1100px;
             margin-top: 80px;
         }
 
         .feature-card {
-            padding: 32px;
+            padding: 30px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 16px;
-            transition: all 0.3s;
+            border-radius: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .feature-card:hover {
             transform: translateY(-4px);
             border-color: var(--accent-primary);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-lg);
         }
 
         .feature-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            font-size: 44px;
+            margin-bottom: 14px;
         }
 
         .feature-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            color: var(--text-primary);
         }
 
         .feature-desc {
             color: var(--text-secondary);
-            font-size: 15px;
+            font-size: 14px;
+            line-height: 1.6;
         }
 
         /* Auth Page */
@@ -676,76 +749,83 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             padding: 48px;
+            background: radial-gradient(ellipse at center, rgba(0, 102, 255, 0.08) 0%, transparent 60%);
         }
 
         .auth-box {
             width: 100%;
-            max-width: 450px;
+            max-width: 440px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 48px;
+            border-radius: 18px;
+            padding: 44px;
+            box-shadow: var(--shadow-lg);
         }
 
         .auth-title {
-            font-size: 32px;
+            font-size: 30px;
             font-weight: 800;
-            margin-bottom: 32px;
+            margin-bottom: 30px;
             text-align: center;
+            color: var(--text-primary);
         }
 
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 22px;
         }
 
         .form-label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .form-input {
             width: 100%;
-            padding: 14px 18px;
+            padding: 13px 16px;
             background: var(--bg-secondary);
             border: 2px solid var(--border-color);
-            border-radius: 10px;
+            border-radius: 9px;
             color: var(--text-primary);
             font-size: 15px;
             font-family: inherit;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .form-input:focus {
             outline: none;
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: var(--bg-primary);
         }
 
         .auth-button {
             width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            padding: 15px;
+            background: var(--gradient-blue);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 9px;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 15px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             margin-top: 8px;
+            box-shadow: var(--shadow-accent);
         }
 
         .auth-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            box-shadow: 0 6px 24px var(--accent-glow);
         }
 
         .auth-switch {
             text-align: center;
-            margin-top: 24px;
+            margin-top: 22px;
             color: var(--text-secondary);
             font-size: 14px;
         }
@@ -755,6 +835,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             text-decoration: none;
             font-weight: 600;
             cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .auth-switch a:hover {
+            color: var(--accent-light);
         }
 
         /* Dashboard */
@@ -765,11 +850,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .dashboard-nav {
-            padding: 20px 48px;
+            padding: 18px 48px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: var(--bg-primary);
+            backdrop-filter: blur(10px);
         }
 
         .user-info {
@@ -779,84 +866,96 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            width: 38px;
+            height: 38px;
+            background: var(--gradient-blue);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 18px;
+            font-size: 16px;
+            box-shadow: var(--shadow-accent);
         }
 
         .dashboard-content {
             flex: 1;
             padding: 48px;
+            background: var(--bg-primary);
         }
 
         .dashboard-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 48px;
+            margin-bottom: 44px;
         }
 
         .dashboard-title {
-            font-size: 42px;
+            font-size: 38px;
             font-weight: 800;
+            color: var(--text-primary);
         }
 
         .create-project-btn {
-            padding: 14px 32px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            padding: 13px 30px;
+            background: var(--gradient-blue);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 9px;
             font-weight: 700;
-            font-size: 15px;
+            font-size: 14px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             gap: 8px;
+            box-shadow: var(--shadow-accent);
+        }
+
+        .create-project-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px var(--accent-glow);
         }
 
         .projects-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 22px;
         }
 
         .project-card {
-            padding: 28px;
+            padding: 26px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 16px;
+            border-radius: 14px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .project-card:hover {
             transform: translateY(-4px);
             border-color: var(--accent-primary);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-lg);
+            background: var(--bg-hover);
         }
 
         .project-name {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            color: var(--text-primary);
         }
 
         .project-desc {
             color: var(--text-secondary);
             font-size: 14px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            line-height: 1.5;
         }
 
         .project-date {
@@ -864,14 +963,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: var(--text-tertiary);
         }
 
-        /* Chat Interface */
+        /* Chat Interface with Resizable */
         .chat-container {
             display: flex;
             height: 100vh;
         }
 
         .chat-sidebar {
-            width: 280px;
+            width: 260px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
             display: flex;
@@ -879,7 +978,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .chat-sidebar-header {
-            padding: 20px;
+            padding: 18px;
             border-bottom: 1px solid var(--border-color);
         }
 
@@ -887,73 +986,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 16px;
+            padding: 10px 14px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             color: var(--text-primary);
             cursor: pointer;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.2s;
         }
 
         .back-btn:hover {
-            background: var(--bg-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-hover);
         }
 
         .chat-main {
             flex: 1;
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
 
         .chat-header {
-            padding: 20px 32px;
+            padding: 18px 30px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: var(--bg-secondary);
         }
 
         .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 32px;
+            padding: 30px;
+            background: var(--bg-primary);
         }
 
         .message {
-            margin-bottom: 28px;
-            animation: slideIn 0.4s ease-out;
+            margin-bottom: 26px;
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(16px); }
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .message-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 10px;
+            gap: 10px;
+            margin-bottom: 9px;
         }
 
         .message-role {
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.6px;
         }
 
         .user-role { color: var(--text-primary); }
-        .ai-role { color: var(--accent-secondary); }
+        .ai-role { color: var(--accent-light); }
 
         .message-content {
-            padding: 20px;
-            border-radius: 14px;
+            padding: 18px;
+            border-radius: 12px;
             line-height: 1.7;
-            font-size: 15px;
+            font-size: 14px;
         }
 
         .user-message .message-content {
@@ -967,8 +1070,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .chat-input-area {
-            padding: 32px;
+            padding: 30px;
             border-top: 1px solid var(--border-color);
+            background: var(--bg-secondary);
         }
 
         .chat-input-wrapper {
@@ -977,118 +1081,171 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         #chatInput {
             width: 100%;
-            padding: 18px 70px 18px 20px;
+            padding: 16px 70px 16px 18px;
             background: var(--bg-tertiary);
             border: 2px solid var(--border-color);
-            border-radius: 14px;
+            border-radius: 12px;
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 14px;
             font-family: inherit;
             resize: none;
             outline: none;
-            min-height: 90px;
-            max-height: 220px;
+            min-height: 80px;
+            max-height: 200px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         #chatInput:focus {
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: var(--bg-primary);
         }
 
         #sendBtn {
             position: absolute;
-            right: 14px;
-            bottom: 14px;
-            width: 46px;
-            height: 46px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            right: 12px;
+            bottom: 12px;
+            width: 44px;
+            height: 44px;
+            background: var(--gradient-blue);
             color: white;
             border: none;
-            border-radius: 11px;
+            border-radius: 10px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-accent);
         }
 
+        #sendBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+
+        /* Resizable Preview Panel */
         .chat-preview {
             width: 45%;
             background: var(--bg-secondary);
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            position: relative;
+            min-width: 300px;
+            max-width: 70%;
+        }
+
+        .resize-handle {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background: var(--accent-primary);
+        }
+
+        .resize-handle.dragging {
+            background: var(--accent-primary);
         }
 
         .preview-header {
-            padding: 20px 28px;
+            padding: 18px 26px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: var(--bg-secondary);
+        }
+
+        .preview-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
         }
 
         .preview-content {
             flex: 1;
             overflow: auto;
-            padding: 28px;
+            padding: 26px;
+            background: var(--bg-primary);
         }
 
         .preview-frame {
             width: 100%;
             height: 100%;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             background: white;
+            box-shadow: var(--shadow-md);
         }
 
         .file-list {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
         }
 
         .file-item {
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 10px;
             overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .file-item:hover {
+            border-color: var(--border-hover);
         }
 
         .file-header {
-            padding: 14px 18px;
+            padding: 13px 16px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-header:hover {
+            background: var(--bg-hover);
         }
 
         .file-name {
             font-weight: 600;
-            font-size: 14px;
-            font-family: 'Monaco', monospace;
+            font-size: 13px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: var(--text-primary);
         }
 
         .file-content {
             padding: 0;
-            max-height: 400px;
-            overflow: auto;
-            display: none;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
         }
 
         .file-content.expanded {
-            display: block;
+            max-height: 500px;
+            overflow: auto;
         }
 
         .file-content pre {
             margin: 0;
-            padding: 18px;
+            padding: 16px;
             background: var(--bg-primary);
             color: var(--text-secondary);
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.6;
+            font-family: 'Monaco', 'Courier New', monospace;
         }
 
         .modal {
@@ -1098,7 +1255,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -1111,23 +1269,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .modal-content {
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
+            border-radius: 18px;
+            padding: 38px;
+            max-width: 480px;
             width: 90%;
+            box-shadow: var(--shadow-lg);
         }
 
         .modal-title {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 800;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
+            color: var(--text-primary);
         }
 
         .btn-secondary {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            padding: 12px 24px;
-            border-radius: 10px;
+            padding: 11px 22px;
+            border-radius: 9px;
             color: var(--text-primary);
             font-weight: 600;
             cursor: pointer;
@@ -1135,26 +1295,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .btn-secondary:hover {
-            background: var(--bg-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-hover);
         }
 
         .download-btn {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, var(--success), #34d399);
+            padding: 11px 22px;
+            background: linear-gradient(135deg, var(--success), #00E676);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 9px;
             font-weight: 600;
+            font-size: 13px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(0, 200, 83, 0.3);
         }
 
         .download-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 6px 24px rgba(0, 200, 83, 0.4);
         }
 
         ::-webkit-scrollbar {
@@ -1172,7 +1335,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-tertiary);
+            background: var(--border-hover);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-tertiary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+            opacity: 0.7;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .empty-desc {
+            font-size: 14px;
         }
     </style>
 </head>
@@ -1181,11 +1372,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="landingPage" class="page active landing">
         <nav class="landing-nav">
             <div class="logo-container">
-                <div class="logo">P</div>
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                        <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                        <rect x="6" y="11" width="8" height="2" rx="1" fill="currentColor" fill-opacity="0.3"/>
+                        <rect x="6" y="14" width="6" height="2" rx="1" fill="currentColor" fill-opacity="0.3"/>
+                    </svg>
+                </div>
                 <div class="logo-text">Project-0</div>
             </div>
             <div class="nav-actions">
-                <button onclick="showPage('authPage')">Try It Now</button>
+                <button onclick="scrollToFeatures()">Learn More</button>
+                <button onclick="showPage('authPage')" style="margin-left: 12px;">Try It Now</button>
             </div>
         </nav>
         <div class="landing-hero">
@@ -1196,26 +1395,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </p>
             <button class="hero-cta" onclick="showPage('authPage')">Get Started</button>
             
-            <div class="features">
+            <div class="features" id="featuresSection">
                 <div class="feature-card">
                     <div class="feature-icon">⚡</div>
                     <div class="feature-title">Lightning Fast</div>
-                    <div class="feature-desc">Generate complete MVPs in minutes, not days</div>
+                    <div class="feature-desc">Generate complete MVPs in minutes with advanced AI</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🏗️</div>
                     <div class="feature-title">Full-Stack Ready</div>
-                    <div class="feature-desc">Backend, frontend, and database included</div>
+                    <div class="feature-desc">Backend, frontend, and database automatically configured</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🎨</div>
                     <div class="feature-title">Beautiful UI</div>
-                    <div class="feature-desc">Modern, responsive designs that look professional</div>
+                    <div class="feature-desc">Modern, responsive designs with professional styling</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔐</div>
                     <div class="feature-title">Production Ready</div>
-                    <div class="feature-desc">Security, error handling, and best practices built-in</div>
+                    <div class="feature-desc">Security, error handling, and best practices included</div>
                 </div>
             </div>
         </div>
@@ -1225,8 +1424,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="authPage" class="page">
         <div class="auth-container">
             <div class="auth-box">
-                <div class="logo-container" style="justify-content: center; margin-bottom: 32px;">
-                    <div class="logo">P</div>
+                <div class="logo-container" style="justify-content: center; margin-bottom: 30px;">
+                    <div class="logo">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                            <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                        </svg>
+                    </div>
                     <div class="logo-text">Project-0</div>
                 </div>
                 
@@ -1263,7 +1467,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Password</label>
-                            <input type="password" class="form-input" required id="registerPassword">
+                            <input type="password" class="form-input" required id="registerPassword" minlength="6">
                         </div>
                         <button type="submit" class="auth-button">Create Account</button>
                     </form>
@@ -1279,11 +1483,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="dashboardPage" class="page dashboard">
         <nav class="dashboard-nav">
             <div class="logo-container">
-                <div class="logo">P</div>
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                        <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                    </svg>
+                </div>
                 <div class="logo-text">Project-0</div>
             </div>
             <div class="user-info">
-                <span id="userName"></span>
+                <span id="userName" style="color: var(--text-secondary); font-size: 14px;"></span>
                 <div class="user-avatar" id="userAvatar"></div>
                 <button class="btn-secondary" onclick="logout()">Logout</button>
             </div>
@@ -1292,7 +1501,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="dashboard-header">
                 <h1 class="dashboard-title">Your Projects</h1>
                 <button class="create-project-btn" onclick="showCreateModal()">
-                    <span>+</span> New Project
+                    <span style="font-size: 18px;">+</span> New Project
                 </button>
             </div>
             <div class="projects-grid" id="projectsGrid"></div>
@@ -1305,13 +1514,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="chat-sidebar">
                 <div class="chat-sidebar-header">
                     <button class="back-btn" onclick="showPage('dashboardPage'); loadProjects();">
-                        ← Back to Projects
+                        ← Projects
                     </button>
                 </div>
             </div>
             <div class="chat-main">
                 <div class="chat-header">
-                    <h2 id="chatProjectName"></h2>
+                    <h2 id="chatProjectName" style="font-size: 18px; font-weight: 700; color: var(--text-primary);"></h2>
                     <button class="download-btn" id="downloadBtn" onclick="downloadProject()" style="display:none;">
                         ↓ Download ZIP
                     </button>
@@ -1321,22 +1530,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="chat-input-wrapper">
                         <textarea id="chatInput" placeholder="Describe what you want to build or modify..."></textarea>
                         <button id="sendBtn" onclick="sendMessage()">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                             </svg>
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="chat-preview">
+            <div class="chat-preview" id="chatPreview">
+                <div class="resize-handle" id="resizeHandle"></div>
                 <div class="preview-header">
-                    <h3>Live Preview</h3>
+                    <h3 class="preview-title">Live Preview</h3>
                 </div>
                 <div class="preview-content" id="previewContent">
-                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-tertiary);">
-                        <div style="font-size:48px;margin-bottom:16px;">✨</div>
-                        <div style="font-size:18px;font-weight:600;">Ready to Build</div>
-                        <div style="font-size:14px;margin-top:8px;">Your preview will appear here</div>
+                    <div class="empty-state">
+                        <div class="empty-icon">✨</div>
+                        <div class="empty-title">Ready to Build</div>
+                        <div class="empty-desc">Your preview will appear here</div>
                     </div>
                 </div>
             </div>
@@ -1350,13 +1560,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <form onsubmit="createProject(event)">
                 <div class="form-group">
                     <label class="form-label">Project Name</label>
-                    <input type="text" class="form-input" required id="projectName">
+                    <input type="text" class="form-input" required id="projectName" placeholder="My Awesome Project">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Description / Requirements</label>
-                    <textarea class="form-input" required id="projectDesc" style="min-height:120px;resize:vertical;"></textarea>
+                    <textarea class="form-input" required id="projectDesc" style="min-height:120px;resize:vertical;" placeholder="Describe your MVP in detail..."></textarea>
                 </div>
-                <div style="display:flex;gap:12px;margin-top:24px;">
+                <div style="display:flex;gap:12px;margin-top:22px;">
                     <button type="submit" class="auth-button">Create Project</button>
                     <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
                 </div>
@@ -1371,10 +1581,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let currentProject = null;
         let projectFiles = {};
 
+        // Smooth scroll
+        function scrollToFeatures() {
+            document.getElementById('featuresSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         // Load state from localStorage
         function loadState() {
-            const token = localStorage.getItem('token');
-            const user = localStorage.getItem('user');
+            var token = localStorage.getItem('token');
+            var user = localStorage.getItem('user');
             if (token && user) {
                 currentToken = token;
                 currentUser = JSON.parse(user);
@@ -1385,7 +1600,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Page navigation
         function showPage(pageId) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            var pages = document.querySelectorAll('.page');
+            for (var i = 0; i < pages.length; i++) {
+                pages[i].classList.remove('active');
+            }
             document.getElementById(pageId).classList.add('active');
             
             if (pageId === 'dashboardPage' && currentUser) {
@@ -1396,8 +1614,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Auth functions
         function toggleAuth() {
-            const login = document.getElementById('loginForm');
-            const register = document.getElementById('registerForm');
+            var login = document.getElementById('loginForm');
+            var register = document.getElementById('registerForm');
             if (login.style.display === 'none') {
                 login.style.display = 'block';
                 register.style.display = 'none';
@@ -1409,17 +1627,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         async function handleLogin(e) {
             e.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
+            var email = document.getElementById('loginEmail').value;
+            var password = document.getElementById('loginPassword').value;
             
             try {
-                const response = await fetch('/api/login', {
+                var response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email, password})
+                    body: JSON.stringify({email: email, password: password})
                 });
                 
-                const data = await response.json();
+                var data = await response.json();
                 if (data.success) {
                     currentToken = data.token;
                     currentUser = data.user;
@@ -1437,18 +1655,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         async function handleRegister(e) {
             e.preventDefault();
-            const name = document.getElementById('registerName').value;
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
+            var name = document.getElementById('registerName').value;
+            var email = document.getElementById('registerEmail').value;
+            var password = document.getElementById('registerPassword').value;
             
             try {
-                const response = await fetch('/api/register', {
+                var response = await fetch('/api/register', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name, email, password})
+                    body: JSON.stringify({name: name, email: email, password: password})
                 });
                 
-                const data = await response.json();
+                var data = await response.json();
                 if (data.success) {
                     currentToken = data.token;
                     currentUser = data.user;
@@ -1464,7 +1682,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        function logout() {
+        async function logout() {
+            try {
+                await fetch('/api/logout?token=' + currentToken, {method: 'POST'});
+            } catch(e) {}
+            
             currentToken = null;
             currentUser = null;
             localStorage.removeItem('token');
@@ -1475,17 +1697,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Projects
         async function loadProjects() {
             try {
-                const response = await fetch('/api/projects?token=' + currentToken);
-                const data = await response.json();
+                var response = await fetch('/api/projects?token=' + currentToken);
+                var data = await response.json();
                 
-                const grid = document.getElementById('projectsGrid');
-                grid.innerHTML = data.projects.map(p => `
-                    <div class="project-card" onclick="openProject(${p.id}, '${p.name}')">
-                        <div class="project-name">${p.name}</div>
-                        <div class="project-desc">${p.description}</div>
-                        <div class="project-date">Created ${new Date(p.created_at).toLocaleDateString()}</div>
-                    </div>
-                `).join('');
+                var grid = document.getElementById('projectsGrid');
+                if (data.projects.length === 0) {
+                    grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><div class="empty-icon">📁</div><div class="empty-title">No projects yet</div><div class="empty-desc">Create your first project to get started</div></div>';
+                    return;
+                }
+                
+                grid.innerHTML = data.projects.map(function(p) {
+                    return '<div class="project-card" onclick="openProject(' + p.id + ', \'' + p.name.replace(/'/g, "\\'") + '\')">' +
+                        '<div class="project-name">' + escapeHtml(p.name) + '</div>' +
+                        '<div class="project-desc">' + escapeHtml(p.description) + '</div>' +
+                        '<div class="project-date">Created ' + new Date(p.created_at).toLocaleDateString() + '</div>' +
+                        '</div>';
+                }).join('');
             } catch (error) {
                 console.error('Failed to load projects:', error);
             }
@@ -1501,17 +1728,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         async function createProject(e) {
             e.preventDefault();
-            const name = document.getElementById('projectName').value;
-            const description = document.getElementById('projectDesc').value;
+            var name = document.getElementById('projectName').value;
+            var description = document.getElementById('projectDesc').value;
             
             try {
-                const response = await fetch('/api/projects?token=' + currentToken, {
+                var response = await fetch('/api/projects?token=' + currentToken, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name, description})
+                    body: JSON.stringify({name: name, description: description})
                 });
                 
-                const data = await response.json();
+                var data = await response.json();
                 if (data.success) {
                     closeModal();
                     openProject(data.project_id, name);
@@ -1526,11 +1753,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('chatProjectName').textContent = projectName;
             showPage('chatPage');
             
-            // Load project details
+            // Clear messages
+            document.getElementById('chatMessages').innerHTML = '';
+            
+            // Load project details and history
             try {
-                const response = await fetch('/api/project/' + projectId + '?token=' + currentToken);
-                const data = await response.json();
+                var response = await fetch('/api/project/' + projectId + '?token=' + currentToken);
+                var data = await response.json();
                 projectFiles = data.files || {};
+                
+                // Display chat history
+                if (data.chat_history && data.chat_history.length > 0) {
+                    var messagesDiv = document.getElementById('chatMessages');
+                    for (var i = 0; i < data.chat_history.length; i++) {
+                        var msg = data.chat_history[i];
+                        addMessageToUI(msg.role === 'user' ? 'user' : 'assistant', msg.content);
+                    }
+                }
                 
                 if (Object.keys(projectFiles).length > 0) {
                     showFiles(projectFiles);
@@ -1543,43 +1782,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Chat
         async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
+            var input = document.getElementById('chatInput');
+            var message = input.value.trim();
             if (!message) return;
             
             // Add user message
-            addMessage('user', message);
+            addMessageToUI('user', message);
             input.value = '';
             
             // Add AI message container
-            const messagesDiv = document.getElementById('chatMessages');
-            const aiDiv = document.createElement('div');
+            var messagesDiv = document.getElementById('chatMessages');
+            var aiDiv = document.createElement('div');
             aiDiv.className = 'message ai-message';
             aiDiv.innerHTML = '<div class="message-header"><span class="message-role ai-role">Project-0 AI</span></div><div class="message-content" id="currentResponse"></div>';
             messagesDiv.appendChild(aiDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             
             try {
-                const response = await fetch('/api/chat?token=' + currentToken, {
+                var response = await fetch('/api/chat?token=' + currentToken, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({project_id: currentProject, message: message})
                 });
                 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let fullResponse = '';
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var fullResponse = '';
                 
                 while (true) {
-                    const {done, value} = await reader.read();
-                    if (done) break;
+                    var result = await reader.read();
+                    if (result.done) break;
                     
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\\n');
+                    var chunk = decoder.decode(result.value);
+                    var lines = chunk.split('\\n');
                     
-                    for (const line of lines) {
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
                         if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(6));
+                            var data = JSON.parse(line.slice(6));
                             
                             if (data.type === 'content') {
                                 fullResponse += data.content;
@@ -1598,45 +1838,47 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        function addMessage(role, content) {
-            const messagesDiv = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
+        function addMessageToUI(role, content) {
+            var messagesDiv = document.getElementById('chatMessages');
+            var messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + role + '-message';
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <span class="message-role ${role}-role">${role === 'user' ? 'You' : 'Project-0 AI'}</span>
-                </div>
-                <div class="message-content">${escapeHtml(content)}</div>
-            `;
+            var roleLabel = role === 'user' ? 'You' : 'Project-0 AI';
+            var roleClass = role === 'user' ? 'user-role' : 'ai-role';
+            var contentHtml = role === 'user' ? escapeHtml(content) : marked.parse(content);
+            messageDiv.innerHTML = '<div class="message-header">' +
+                '<span class="message-role ' + roleClass + '">' + roleLabel + '</span>' +
+                '</div>' +
+                '<div class="message-content">' + contentHtml + '</div>';
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function showFiles(files) {
-            const preview = document.getElementById('previewContent');
+            var preview = document.getElementById('previewContent');
             
             // Check if there's an index.html to show
             if (files['frontend/index.html']) {
-                const iframe = document.createElement('iframe');
+                var iframe = document.createElement('iframe');
                 iframe.className = 'preview-frame';
                 iframe.srcdoc = files['frontend/index.html'];
                 preview.innerHTML = '';
                 preview.appendChild(iframe);
             } else {
                 // Show file list
-                let html = '<div class="file-list">';
-                for (const [filename, content] of Object.entries(files)) {
-                    html += `
-                        <div class="file-item">
-                            <div class="file-header" onclick="toggleFile(this)">
-                                <span class="file-name">${filename}</span>
-                                <span>▼</span>
-                            </div>
-                            <div class="file-content">
-                                <pre><code>${escapeHtml(content)}</code></pre>
-                            </div>
-                        </div>
-                    `;
+                var html = '<div class="file-list">';
+                var fileKeys = Object.keys(files);
+                for (var i = 0; i < fileKeys.length; i++) {
+                    var filename = fileKeys[i];
+                    var content = files[filename];
+                    html += '<div class="file-item">' +
+                        '<div class="file-header" onclick="toggleFile(this)">' +
+                        '<span class="file-name">' + escapeHtml(filename) + '</span>' +
+                        '<span>▼</span>' +
+                        '</div>' +
+                        '<div class="file-content">' +
+                        '<pre><code>' + escapeHtml(content) + '</code></pre>' +
+                        '</div>' +
+                        '</div>';
                 }
                 html += '</div>';
                 preview.innerHTML = html;
@@ -1644,9 +1886,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         function toggleFile(header) {
-            const content = header.nextElementSibling;
-            content.classList.toggle('expanded');
-            header.querySelector('span:last-child').textContent = content.classList.contains('expanded') ? '▲' : '▼';
+            var content = header.nextElementSibling;
+            var arrow = header.querySelector('span:last-child');
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                arrow.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                arrow.textContent = '▲';
+            }
         }
 
         async function downloadProject() {
@@ -1654,10 +1902,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         function escapeHtml(text) {
-            const div = document.createElement('div');
+            var div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
+
+        // Resizable panel
+        (function() {
+            var resizeHandle = document.getElementById('resizeHandle');
+            var chatPreview = document.getElementById('chatPreview');
+            var chatMain = document.querySelector('.chat-main');
+            var isDragging = false;
+            var startX = 0;
+            var startWidth = 0;
+
+            resizeHandle.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                startX = e.clientX;
+                startWidth = chatPreview.offsetWidth;
+                resizeHandle.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                
+                var deltaX = startX - e.clientX;
+                var newWidth = startWidth + deltaX;
+                var minWidth = 300;
+                var maxWidth = window.innerWidth * 0.7;
+                
+                if (newWidth >= minWidth && newWidth <= maxWidth) {
+                    chatPreview.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    resizeHandle.classList.remove('dragging');
+                    document.body.style.cursor = '';
+                }
+            });
+        })();
 
         // Initialize
         loadState();
@@ -1673,12 +1961,11 @@ if __name__ == "__main__":
     ║      🚀 PROJECT-0 PROFESSIONAL PLATFORM 🚀           ║
     ║                                                       ║
     ║   Complete Full-Stack MVP Generator                  ║
-    ║   • Landing Page                                     ║
-    ║   • Authentication (Register/Login)                  ║
-    ║   • Dashboard with Projects                          ║
-    ║   • AI Chat with Context                             ║
-    ║   • Live Preview                                     ║
-    ║   • ZIP Download                                     ║
+    ║   • Modern Professional Design                       ║
+    ║   • Resizable Preview Panel                          ║
+    ║   • Chat History Storage                             ║
+    ║   • Secure Authentication                            ║
+    ║   • Smooth Scroll & Navigation                       ║
     ║                                                       ║
     ║   Open: http://localhost:8000                        ║
     ║                                                       ║

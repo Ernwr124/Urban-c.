@@ -2,58 +2,70 @@
 
 > **The Complete Full-Stack MVP Generator with Authentication & Project Management**
 
-## ✨ What's New - Full Platform!
+## ✨ What's New - Enhanced Version!
 
-**Project-0** is now a complete professional platform with:
+**Project-0** is now even better with:
 
-- 🎨 **Beautiful Landing Page** with logo
-- 🔐 **User Authentication** (Register & Login)
-- 📊 **Project Dashboard** with project list
-- 🤖 **AI Chat** with project context memory
-- 👁️ **Live Preview** without running servers
-- 📦 **ZIP Download** with auto-run scripts
-- 🇬🇧 **English Interface**
+- 📏 **Resizable Preview Panel** - Drag to adjust width
+- 📜 **Chat History** - Full conversation context saved
+- 🔒 **Enhanced Security** - Real token expiration & session management
+- 🎨 **Modern Professional Design** - Darker colors, glow effects
+- 🎯 **Smooth Navigation** - Scroll animations on landing
+- 💾 **Persistent Storage** - Everything saved server-side
+- 📊 **Empty States** - Beautiful placeholders
+- ⚡ **Better UX** - Cubic-bezier animations
 
 ## 🎯 What It Does
 
 ### Landing Page
-- Beautiful hero section
-- Feature showcase
-- Professional design
-- "Try It Now" CTA
+- Beautiful hero section with gradient title
+- Feature showcase cards
+- Smooth scroll to sections
+- Professional design with modern colors
 
-### Authentication
-- **Register**: Name, Email, Password (encrypted SHA-256)
-- **Login**: Email, Password
-- Secure session management
-- Persistent login (localStorage)
+### Authentication System
+- **Register**: Name, Email, Password (min 6 chars)
+- **Login**: Email, Password with validation
+- **Security**: SHA-256 + salt hashing
+- **Sessions**: 7-day expiry with secure tokens
+- **Logout**: Server-side session cleanup
 
 ### Dashboard
-- View all your projects
-- Create new projects
-- Click to open/edit projects
-- Project metadata (created date, description)
+- View all your projects in grid
+- Create new projects with modal
+- Click project to open with full history
+- User avatar and profile info
+- Empty state when no projects
 
 ### AI Chat Interface
-- **Split-screen**: Chat (55%) + Preview (45%)
-- **Project Context**: AI remembers previous conversations
-- **Live Preview**: See results instantly in iframe
-- **File Viewer**: Collapsible file list
-- **Download**: Get complete project as ZIP
+- **Resizable Panels**: Drag the divider to adjust width!
+- **Chat History**: All messages saved and restored
+- **Project Context**: AI remembers everything
+- **Live Preview**: iframe with HTML or file list
+- **Download**: Get complete ZIP with auto-run scripts
 
 ### AI Capabilities
-- **Context Memory**: Remembers project requirements
-- **Incremental Updates**: Modify existing code
-- **Full-Stack Generation**: Backend + Frontend + DB
-- **Production-Ready**: Complete, working code
+- **Context Memory**: Remembers all project details
+- **Incremental Updates**: Edit existing code
+- **Full-Stack**: Node.js + Database + Frontend
+- **Production-Ready**: Complete, tested code
 
 ## 🚀 Quick Start
 
 ```bash
-# Run the platform
+# 1. Install dependencies
+pip install fastapi uvicorn httpx pydantic
+
+# 2. Start Ollama
+ollama serve
+
+# 3. Pull model
+ollama pull glm-4.6:cloud
+
+# 4. Run platform
 python project0.py
 
-# Open browser
+# 5. Open browser
 http://localhost:8000
 ```
 
@@ -61,175 +73,115 @@ http://localhost:8000
 
 ### 1. Landing Page
 ```
-Landing → "Try It Now" → Auth
+→ Click "Learn More" (smooth scroll to features)
+→ Click "Try It Now" (go to auth)
 ```
 
-### 2. Sign Up
+### 2. Sign Up / Login
 ```
-Name: John Doe
-Email: john@example.com
-Password: ******
-→ Creates account → Auto login → Dashboard
+Register:
+- Name: John Doe
+- Email: john@example.com  
+- Password: ******** (min 6 chars)
+→ Auto login → Dashboard
+
+Login:
+- Email + Password
+- 7-day session
+- Remember me functionality
 ```
 
 ### 3. Dashboard
 ```
-Projects List (empty at first)
-→ Click "New Project"
+→ View all projects (grid layout)
+→ Click "+ New Project"
+→ Enter name and description
+→ Opens chat interface
 ```
 
-### 4. Create Project
+### 4. Chat with AI
 ```
-Project Name: Task Manager
-Description: Build a task management app with user auth, 
-SQLite database, and modern UI
-
-→ Click "Create Project" → Opens Chat
-```
-
-### 5. Chat with AI
-```
-AI: "What would you like to build?"
-
-You: "Create a complete task manager with:
-- User authentication
-- SQLite database
-- CRUD operations for tasks
-- Beautiful UI with Tailwind CSS
-- Responsive design"
+You: "Create a task manager with auth and SQLite"
 
 AI: *Generates complete project*
-→ Shows files in preview
-→ Live preview in iframe (if HTML available)
+    → Shows files in preview
+    → History saved automatically
+
+You: "Add dark mode toggle"
+
+AI: *Remembers context*
+    → Updates existing code
+    → Maintains consistency
 ```
 
-### 6. Edit/Modify
+### 5. Resize Preview
 ```
-You: "Add a dark mode toggle to the UI"
-
-AI: *Remembers project context*
-     *Updates existing files*
-     *Maintains code consistency*
-```
-
-### 7. Download
-```
-Click "Download ZIP"
-→ Gets project-name.zip
-→ Contains:
-   backend/
-   ├── server.js
-   ├── package.json
-   ├── database.js
-   └── .env.example
-   frontend/
-   └── index.html
-   start.sh   ← Run this!
-   start.bat  ← Windows version
+→ Find thin line between chat and preview
+→ Hover (cursor changes to col-resize)
+→ Click and drag left/right
+→ Panel resizes smoothly!
+→ Min: 300px, Max: 70% of screen
 ```
 
-### 8. Deploy
-```bash
-unzip project-name.zip
-cd project-name
-chmod +x start.sh
-./start.sh
-
-# Or manually:
-cd backend
-npm install
-npm start
+### 6. Download & Deploy
+```
+→ Click "Download ZIP"
+→ Extract files
+→ Run: ./start.sh
+→ Backend starts automatically!
 ```
 
-## 🎨 Features Detail
+## 🎨 Design System
 
-### Landing Page
-- Hero section with gradient title
-- 4 feature cards:
-  - ⚡ Lightning Fast
-  - 🏗️ Full-Stack Ready
-  - 🎨 Beautiful UI
-  - 🔐 Production Ready
+### Color Palette
 
-### Authentication System
-- **Secure**: SHA-256 password hashing
-- **SQLite Database**: Users, Projects, Sessions tables
-- **Session Management**: Token-based auth
-- **Persistent**: localStorage for auto-login
+**Background:**
+- Primary: `#0A0A0F` (deep black)
+- Secondary: `#13131A` (darker)
+- Tertiary: `#1A1A24` (cards)
 
-### Dashboard
-- **Project Cards**: Grid layout, hover effects
-- **Create Button**: Modal form for new projects
-- **User Info**: Avatar, name, logout button
-- **Responsive**: Works on all devices
+**Accent:**
+- Primary: `#0066FF` (professional blue)
+- Secondary: `#0052CC` (darker blue)
+- Light: `#3385FF` (light blue)
+- Glow: `rgba(0, 102, 255, 0.2)` (glow effect)
 
-### Chat Interface
-```
-┌─────────────────────────┬──────────────────────┐
-│ SIDEBAR │  CHAT (55%)    │   PREVIEW (45%)      │
-├─────────┼────────────────┼──────────────────────┤
-│         │                │                      │
-│ Back to │  Messages      │  Live Preview        │
-│ Project │  • User        │  (iframe or files)   │
-│         │  • AI          │                      │
-│         │                │  [Download ZIP]      │
-│         │  Input Area    │                      │
-│         │  [Send ⚡]     │                      │
-└─────────┴────────────────┴──────────────────────┘
-```
+**Text:**
+- Primary: `#FFFFFF` (white)
+- Secondary: `#B4B4C8` (silver)
+- Tertiary: `#7878A0` (gray)
 
-### AI Context Memory
-```python
-# AI remembers:
-- Project description
-- Previous requests
-- Generated files
-- User modifications
+**Status:**
+- Success: `#00C853` (green)
+- Warning: `#FF9100` (orange)
+- Error: `#FF1744` (red)
 
-# Example conversation:
-User: "Create a blog platform"
-AI: *generates complete MVP*
+### Typography
+- Font: Inter (Google Fonts)
+- Weights: 300, 400, 500, 600, 700, 800, 900
+- Letter spacing on titles
+- Line height: 1.6
 
-User: "Add categories to posts"
-AI: *remembers blog context*
-     *updates existing code*
-     *adds category feature*
-```
-
-### Live Preview
-- **iframe**: Shows `frontend/index.html` live
-- **No Server**: Runs directly in browser
-- **Interactive**: Full functionality preview
-- **File List**: If no HTML, shows collapsible files
-
-### ZIP Download
-```
-project-name.zip
-├── backend/
-│   ├── server.js
-│   ├── package.json
-│   ├── database.js
-│   └── .env.example
-├── frontend/
-│   └── index.html
-├── README.md
-├── start.sh      ← chmod +x && ./start.sh
-└── start.bat     ← Windows: double-click
-```
+### Effects
+- Backdrop blur on sticky elements
+- Box shadows with layers
+- Cubic-bezier transitions
+- Gradient buttons with glow
+- Hover transform effects
 
 ## 💻 Technical Stack
 
 ### Platform Backend (Python)
-- **FastAPI**: Web framework
-- **SQLite**: Database (project0.db)
+- **FastAPI**: High-performance web framework
+- **SQLite**: Lightweight database
 - **Ollama**: AI inference
-- **Sessions**: Token-based auth
+- **Sessions**: Token-based auth with expiry
 
 ### Generated Backend (Node.js)
-- **Express**: Web framework
-- **SQLite/MongoDB**: Database
+- **Express**: Minimal web framework
+- **SQLite/MongoDB**: Database options
 - **CORS**: Cross-origin support
-- **dotenv**: Environment variables
+- **dotenv**: Environment config
 
 ### Generated Frontend
 - **HTML5**: Semantic markup
@@ -245,7 +197,7 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT NOT NULL,  -- SHA-256 + salt
     created_at TIMESTAMP
 );
 ```
@@ -257,8 +209,9 @@ CREATE TABLE projects (
     user_id INTEGER,
     name TEXT NOT NULL,
     description TEXT,
-    context TEXT,          -- Conversation history
+    context TEXT,          -- AI conversation context
     files TEXT,            -- JSON of generated files
+    chat_history TEXT,     -- 🆕 Full chat history
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -268,73 +221,222 @@ CREATE TABLE projects (
 ### Sessions Table
 ```sql
 CREATE TABLE sessions (
-    token TEXT PRIMARY KEY,
+    token TEXT PRIMARY KEY,       -- 48-byte secure token
     user_id INTEGER,
     created_at TIMESTAMP,
+    expires_at TIMESTAMP,          -- 🆕 7-day expiry
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ```
 
-## 🔐 Security
+## 🔐 Security Features
 
-- ✅ Password hashing (SHA-256)
-- ✅ SQL injection protection (parameterized queries)
-- ✅ Session tokens (32-byte secure random)
-- ✅ CORS configured
-- ✅ Input validation
-- ✅ XSS prevention (escapeHtml)
-
-## 🎨 UI/UX
-
-### Design System
-- **Font**: Inter (Google Fonts)
-- **Colors**: 
-  - Primary: #2563eb (blue)
-  - Success: #10b981 (green)
-  - Error: #ef4444 (red)
-- **Spacing**: 8px base grid
-- **Radius**: 8-20px rounded corners
-- **Shadows**: Layered, colored shadows
-- **Animations**: Cubic-bezier, smooth
-
-### Responsive
-- Mobile: 320px+
-- Tablet: 768px+
-- Desktop: 1024px+
+- ✅ **Password Hashing**: SHA-256 with salt
+- ✅ **Secure Tokens**: 48-byte random tokens
+- ✅ **Session Expiry**: 7-day automatic expiration
+- ✅ **SQL Injection**: Parameterized queries
+- ✅ **XSS Prevention**: HTML escaping
+- ✅ **CORS**: Configured properly
+- ✅ **Logout**: Server-side session cleanup
+- ✅ **Validation**: Min password length (6 chars)
 
 ## 📝 API Endpoints
 
 ### Authentication
 ```
-POST /api/register
-POST /api/login
+POST /api/register     - Create new account
+POST /api/login        - Login with credentials
+POST /api/logout       - Logout and clear session
 ```
 
 ### Projects
 ```
-GET  /api/projects?token=xxx
-POST /api/projects?token=xxx
-GET  /api/project/:id?token=xxx
+GET  /api/projects?token=xxx           - Get user's projects
+POST /api/projects?token=xxx           - Create new project
+GET  /api/project/:id?token=xxx        - Get project with history
 ```
 
 ### Chat
 ```
-POST /api/chat?token=xxx
+POST /api/chat?token=xxx               - Chat with AI (streaming)
 ```
 
 ### Download
 ```
-GET /api/download/:id?token=xxx
+GET /api/download/:id?token=xxx        - Download project ZIP
+```
+
+## 🎯 New Features Explained
+
+### 1. Resizable Preview Panel
+
+The preview panel can now be resized by dragging:
+
+```javascript
+// How it works:
+1. Hover over the thin line between chat and preview
+2. Cursor changes to col-resize (↔)
+3. Click and drag left/right
+4. Panel resizes smoothly
+5. Min width: 300px
+6. Max width: 70% of screen
+```
+
+**Why it's useful:**
+- Long code? Expand preview to see it all
+- Focus on chat? Shrink preview
+- Perfect for any screen size
+
+### 2. Chat History Storage
+
+Every message is saved and restored:
+
+```javascript
+// What's saved:
+{
+  "role": "user" | "assistant",
+  "content": "message text",
+  "timestamp": "2024-11-17T18:37:00"
+}
+
+// When you open a project:
+- All previous messages load
+- Context is restored
+- Continue from where you left off
+```
+
+### 3. Enhanced Security
+
+Real security implementation:
+
+```python
+# Password hashing with salt
+salt = "project0_secure_salt_2024"
+hash = sha256(password + salt)
+
+# Secure session tokens
+token = secrets.token_urlsafe(48)  # 48 bytes
+
+# Session expiry
+expires = now + 7_days
+
+# Token validation
+if token_expired:
+    return 401_Unauthorized
+
+# Logout cleanup
+DELETE FROM sessions WHERE token = ?
+```
+
+### 4. Smooth Navigation
+
+Landing page with smooth scroll:
+
+```javascript
+// "Learn More" button
+scrollToFeatures() {
+  document.getElementById('features')
+    .scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center' 
+    });
+}
+```
+
+### 5. Modern Design
+
+Professional dark theme:
+
+```css
+/* Deep blacks */
+--bg-primary: #0A0A0F;
+--bg-secondary: #13131A;
+
+/* Professional blue */
+--accent-primary: #0066FF;
+
+/* Glow effects */
+box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+
+/* Smooth animations */
+transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+```
+
+## 🎉 Usage Examples
+
+### Example 1: Task Manager
+```
+Project Name: Task Manager Pro
+
+Description:
+Build a task management app with:
+- User authentication (JWT)
+- SQLite database
+- CRUD operations for tasks
+- Categories and tags
+- Due dates and priorities
+- Dark mode toggle
+- Responsive design
+
+→ AI generates complete project
+→ Shows live preview
+→ Download and run!
+```
+
+### Example 2: Blog Platform
+```
+Project Name: My Blog
+
+Description:
+Create a blog platform with:
+- Posts with rich text editor
+- Comments system
+- Categories and tags
+- User profiles
+- Image uploads
+- Search functionality
+- SEO optimized
+
+→ AI creates full-stack blog
+→ MongoDB for flexibility
+→ Modern UI with Tailwind
+```
+
+### Example 3: E-commerce
+```
+Project Name: Shop MVP
+
+Description:
+E-commerce site with:
+- Product catalog
+- Shopping cart
+- Checkout process
+- Payment integration (Stripe)
+- Order management
+- Admin panel
+- Email notifications
+
+→ Complete e-commerce platform
+→ Secure payment flow
+→ Production ready
 ```
 
 ## 🔧 Configuration
 
-File: `project0.py`
+Edit in `project0.py`:
 
 ```python
+# Ollama settings
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "glm-4.6:cloud"
+
+# Database
 DB_FILE = "project0.db"
+
+# Security
+SALT = "project0_secure_salt_2024"
+SESSION_EXPIRY_DAYS = 7
+TOKEN_LENGTH = 48
 ```
 
 ## 🚀 Deployment
@@ -344,93 +446,150 @@ DB_FILE = "project0.db"
 python project0.py
 ```
 
-### Production
+### Production (Gunicorn)
 ```bash
-# With Gunicorn
 pip install gunicorn
-gunicorn project0:app -w 4 -k uvicorn.workers.UvicornWorker
+gunicorn project0:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
 
-# With Docker
-docker build -t project0 .
-docker run -p 8000:8000 project0
+### Docker
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY project0.py .
+CMD ["python", "project0.py"]
 ```
 
 ## 📊 File Size
 
 ```
-project0.py: 1692 lines, 56 KB
+project0.py: 1979 lines, 68 KB
 Everything in ONE file! ✅
 ```
 
-## ✨ What's Included
+## ✨ Complete Feature List
 
-- ✅ Landing page with hero
-- ✅ Authentication system
-- ✅ User dashboard
-- ✅ Project management
-- ✅ AI chat with context
-- ✅ Live preview
-- ✅ File viewer
-- ✅ ZIP download
+**Landing Page:**
+- ✅ Hero section with gradient
+- ✅ Feature cards
+- ✅ Smooth scroll animation
+- ✅ Modern logo (SVG)
+- ✅ Professional colors
+
+**Authentication:**
+- ✅ Register with validation
+- ✅ Login with remember me
+- ✅ Secure password hashing
+- ✅ Session management
+- ✅ Token expiration
+- ✅ Logout cleanup
+
+**Dashboard:**
+- ✅ Project grid view
+- ✅ Create project modal
+- ✅ User profile display
+- ✅ Empty states
+- ✅ Hover effects
+
+**Chat Interface:**
+- ✅ Split-screen layout
+- ✅ Resizable panels (NEW!)
+- ✅ Chat history (NEW!)
+- ✅ Real-time streaming
+- ✅ Markdown rendering
+- ✅ Code highlighting
+- ✅ Status indicators
+
+**Preview Panel:**
+- ✅ Live iframe preview
+- ✅ File list viewer
+- ✅ Collapsible sections
+- ✅ Drag to resize (NEW!)
+- ✅ Syntax highlighting
+
+**Download:**
+- ✅ ZIP generation
 - ✅ Auto-run scripts
-- ✅ Responsive design
-- ✅ Dark theme
-- ✅ Professional UI
-- ✅ Security built-in
-- ✅ All in English
+- ✅ Complete project structure
+- ✅ README included
 
-## 🎯 Example Projects
+**Design:**
+- ✅ Dark professional theme
+- ✅ Modern blue accents
+- ✅ Glow effects
+- ✅ Smooth animations
+- ✅ Responsive layout
+- ✅ Custom scrollbars
 
-### Task Manager
+**Security:**
+- ✅ Password encryption
+- ✅ Secure sessions
+- ✅ Token validation
+- ✅ SQL injection protection
+- ✅ XSS prevention
+- ✅ CORS configuration
+
+## 🎯 Pro Tips
+
+### 1. Use Resizable Panel
+When code is long, drag the preview panel wider to see everything!
+
+### 2. Check History
+Open an old project - your entire conversation is saved!
+
+### 3. Be Specific
+More details = better results:
 ```
-Name: Task Manager Pro
-Description: Build a task management app with user authentication, 
-SQLite database, categories, due dates, and dark mode
-
-AI Generates:
-→ Express backend with JWT auth
-→ SQLite database (users, tasks, categories)
-→ CRUD API endpoints
-→ Beautiful Tailwind UI
-→ Dark mode toggle
-→ Responsive design
-```
-
-### Blog Platform
-```
-Name: My Blog
-Description: Create a blog platform with posts, comments, 
-categories, and rich text editor
-
-AI Generates:
-→ Node.js + Express backend
-→ MongoDB database
-→ Post/Comment models
-→ Rich text editor
-→ Category system
-→ Modern UI
+❌ "Make a todo app"
+✅ "Create a todo app with user auth, categories, due dates, 
+    dark mode, and SQLite database"
 ```
 
-## 🎉 Ready to Use!
-
-```bash
-# 1. Start platform
-python project0.py
-
-# 2. Open browser
-http://localhost:8000
-
-# 3. Sign up / Login
-
-# 4. Create project
-
-# 5. Chat with AI
-
-# 6. Download ZIP
-
-# 7. Run project
-./start.sh
+### 4. Iterative Development
+Start simple, then enhance:
 ```
+1. "Create basic blog"
+2. "Add comments"
+3. "Add categories"
+4. "Add search"
+```
+
+### 5. Context Matters
+AI remembers your project! You can say:
+```
+"Update the login page"
+"Add error handling to the API"
+"Refactor the database schema"
+```
+
+## 🐛 Troubleshooting
+
+**Q: Preview panel not showing?**
+A: Make sure AI generated frontend/index.html file
+
+**Q: Can't resize preview?**
+A: Look for the thin blue line between panels, hover and drag
+
+**Q: History not loading?**
+A: Check if you're logged in and token is valid
+
+**Q: Session expired?**
+A: Sessions expire after 7 days, just login again
+
+**Q: Ollama not responding?**
+A: Make sure `ollama serve` is running
+
+**Q: Model not found?**
+A: Run `ollama pull glm-4.6:cloud`
+
+## 📚 Learn More
+
+- Check `START.txt` for quick start guide
+- Read the code - it's well-commented!
+- Try the examples above
+- Experiment with different projects
 
 ## 📄 License
 
@@ -441,3 +600,11 @@ MIT License - Build amazing things!
 **Made with ❤️ for rapid MVP development**
 
 Transform ideas into production-ready applications! 🚀
+
+**New in this version:**
+- Resizable preview panel
+- Complete chat history
+- Enhanced security
+- Modern professional design
+- Smooth navigation
+- Better UX everywhere
