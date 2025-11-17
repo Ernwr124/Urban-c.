@@ -2410,28 +2410,64 @@ def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     success_html = f'<div class="alert alert-success">{success}</div>' if success else ""
     
+    # Different sections for HR vs Candidate
+    if user.role == "hr":
+        profile_sections = f"""
+        <div class="card">
+            <h3 style="margin-bottom: 20px;">Информация о компании</h3>
+            <div class="form-group">
+                <label class="form-label">Название компании</label>
+                <input type="text" name="company_name" class="form-control" value="{user.company_name or ''}" placeholder="ТОО TechCorp">
+            </div>
+            <div class="form-group">
+                <label class="form-label">О компании</label>
+                <textarea name="company_description" class="form-control" style="min-height: 150px;" placeholder="Опишите вашу компанию, миссию, ценности...">{user.company_description or ''}</textarea>
+            </div>
+        </div>
+        """
+    else:
+        profile_sections = f"""
+        <!-- Skills Section -->
+        <div class="card" id="skills">
+            <h3 style="margin-bottom: 20px;">Навыки</h3>
+            <p class="text-muted text-sm" style="margin-bottom: 16px;">Добавьте реальные навыки для точного поиска вакансий</p>
+            <div class="form-group">
+                <label class="form-label">Ваши навыки</label>
+                <textarea name="skills" class="form-control" placeholder="Введите навыки (через запятую или с новой строки):
+
+Примеры:
+React.js, Node.js, TypeScript
+Python, Django, FastAPI
+HTML, CSS, JavaScript, Bootstrap
+Git, Docker, Kubernetes
+Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills or ''}</textarea>
+                <p class="text-muted text-xs" style="margin-top: 8px;">💡 Эти навыки будут использоваться для точного поиска. Добавляйте только те, которыми реально владеете.</p>
+            </div>
+        </div>
+        """
+    
     content = f"""
     <div class="container-sm">
         <div style="margin-bottom: 32px;">
-            <a href="/profile" class="btn btn-outline">← Back to Profile</a>
+            <a href="/profile" class="btn btn-outline">← Назад к профилю</a>
         </div>
         
-        <h1>Edit Profile</h1>
-        <p class="text-muted" style="margin-bottom: 32px;">Update your professional information</p>
+        <h1>Редактировать профиль</h1>
+        <p class="text-muted" style="margin-bottom: 32px;">Обновите вашу информацию</p>
         
         {error_html}
         {success_html}
         
         <!-- Avatar Upload -->
         <div class="card">
-            <h3 style="margin-bottom: 20px;">Profile Picture</h3>
+            <h3 style="margin-bottom: 20px;">Фото профиля</h3>
             <form method="POST" action="/upload-avatar" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 24px;">
                 <div>
                     {f'<img src="/uploads/avatars/{user.avatar}" alt="Avatar" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">' if user.avatar else f'<div style="width: 100px; height: 100px; border-radius: 50%; background: var(--white); color: var(--black); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700;">{user.full_name[0].upper()}</div>'}
                 </div>
                 <div style="flex: 1;">
                     <input type="file" name="avatar" accept="image/*" class="form-control" style="margin-bottom: 12px;">
-                    <button type="submit" class="btn btn-primary">Upload Photo</button>
+                    <button type="submit" class="btn btn-primary">Загрузить фото</button>
                 </div>
             </form>
         </div>
@@ -2439,47 +2475,26 @@ def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
         <!-- Basic Information -->
         <form method="POST" action="/update-profile">
             <div class="card">
-                <h3 style="margin-bottom: 20px;">Basic Information</h3>
-                
+                <h3 style="margin-bottom: 20px;">Основная информация</h3>
                 <div class="form-group">
-                    <label class="form-label">Full Name</label>
+                    <label class="form-label">Полное имя</label>
                     <input type="text" name="full_name" class="form-control" value="{user.full_name}" required>
                 </div>
-                
                 <div class="form-group">
-                    <label class="form-label">Headline</label>
-                    <input type="text" name="headline" class="form-control" value="{user.headline or ''}" placeholder="e.g. Senior Software Engineer at Tech Company">
+                    <label class="form-label">Заголовок</label>
+                    <input type="text" name="headline" class="form-control" value="{user.headline or ''}" placeholder="Senior Software Engineer at Tech Company">
                 </div>
-                
                 <div class="form-group">
-                    <label class="form-label">Location</label>
-                    <input type="text" name="location" class="form-control" value="{user.location or ''}" placeholder="e.g. San Francisco, CA">
+                    <label class="form-label">Локация</label>
+                    <input type="text" name="location" class="form-control" value="{user.location or ''}" placeholder="Алматы, Казахстан">
                 </div>
-                
                 <div class="form-group">
-                    <label class="form-label">About</label>
-                    <textarea name="bio" class="form-control" placeholder="Tell us about yourself, your experience, and what makes you unique...">{user.bio or ''}</textarea>
+                    <label class="form-label">О себе</label>
+                    <textarea name="bio" class="form-control" placeholder="Расскажите о себе...">{user.bio or ''}</textarea>
                 </div>
             </div>
             
-            <!-- Skills Section -->
-            <div class="card" id="skills">
-                <h3 style="margin-bottom: 20px;">Skills</h3>
-                <p class="text-muted text-sm" style="margin-bottom: 16px;">Add your actual skills for more accurate job matching. Be honest!</p>
-                
-                <div class="form-group">
-                    <label class="form-label">Your Skills</label>
-                    <textarea name="skills" class="form-control" placeholder="Enter your skills (one per line or comma-separated):
-
-Examples:
-React.js, Node.js, TypeScript
-Python, Django, FastAPI
-HTML, CSS, JavaScript, Bootstrap
-Git, Docker, Kubernetes
-Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills or ''}</textarea>
-                    <p class="text-muted text-xs" style="margin-top: 8px;">💡 These skills will be used for accurate job matching. Only add skills you truly possess.</p>
-                </div>
-            </div>
+            {profile_sections}
             
             <!-- Contact Information -->
             <div class="card">
@@ -2964,6 +2979,14 @@ def candidate_profile_view_page(candidate: User, hr_user: User, db: Session) -> 
         
         {resume_section}
         
+        {'''
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">Анализ кандидата</h3>
+            <p class="text-muted text-sm" style="margin-bottom: 16px;">Сравните резюме кандидата с вашей вакансией используя AI</p>
+            <a href="/hr/analyze-candidate/''' + str(candidate.id) + '''" class="btn btn-primary btn-large">Анализировать с вакансией</a>
+        </div>
+        ''' if candidate.resume_file else ''}
+        
         {request_section}
     </div>
     """
@@ -3126,6 +3149,8 @@ async def update_profile(
     website: str = Form(""),
     whatsapp: str = Form(""),
     instagram: str = Form(""),
+    company_name: str = Form(""),
+    company_description: str = Form(""),
     user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
@@ -3135,7 +3160,6 @@ async def update_profile(
     user.location = location
     user.bio = bio
     user.phone = phone
-    user.skills = skills
     user.linkedin_url = linkedin_url
     user.github_url = github_url
     user.website = website
@@ -3144,6 +3168,12 @@ async def update_profile(
     if user.role == "hr":
         user.whatsapp = whatsapp
         user.instagram = instagram
+        user.company_name = company_name
+        user.company_description = company_description
+    else:
+        # Candidate-specific fields
+        user.phone = phone
+        user.skills = skills
     
     db.commit()
     
@@ -3496,6 +3526,361 @@ async def health_check():
         "model": Config.OLLAMA_MODEL,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+# ============================================================================
+# JOB MANAGEMENT ROUTES
+# ============================================================================
+
+@app.get("/jobs/create", response_class=HTMLResponse)
+async def create_job_get(user: User = Depends(require_auth)):
+    """Create job page"""
+    if user.role != "hr":
+        raise HTTPException(status_code=403)
+    
+    content = """
+    <div class="container-sm">
+        <div style="margin-bottom: 32px;"><a href="/profile" class="btn btn-outline">← Назад</a></div>
+        <h1>Создать вакансию</h1>
+        <form method="POST" action="/jobs/create">
+            <div class="card">
+                <div class="form-group">
+                    <label class="form-label">Название вакансии</label>
+                    <input type="text" name="title" class="form-control" required placeholder="Senior Python Developer">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Описание</label>
+                    <textarea name="description" class="form-control" required style="min-height: 200px;" placeholder="Полное описание вакансии..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Требования</label>
+                    <textarea name="requirements" class="form-control" style="min-height: 150px;" placeholder="Опыт работы, необходимые знания..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Требуемые навыки</label>
+                    <textarea name="skills_required" class="form-control" placeholder="Python, Django, PostgreSQL..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Локация</label>
+                    <input type="text" name="location" class="form-control" placeholder="Алматы / Удаленно">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Зарплата</label>
+                    <input type="text" name="salary_range" class="form-control" placeholder="500,000 - 800,000 тг">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Тип занятости</label>
+                    <select name="employment_type" class="form-control">
+                        <option value="full-time">Полная занятость</option>
+                        <option value="part-time">Частичная занятость</option>
+                        <option value="contract">Контракт</option>
+                        <option value="freelance">Фриланс</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-large">Создать вакансию</button>
+            </div>
+        </form>
+    </div>
+    """
+    return get_base_html("Создать вакансию", content, user)
+
+@app.post("/jobs/create")
+async def create_job_post(
+    title: str = Form(...),
+    description: str = Form(...),
+    requirements: str = Form(""),
+    skills_required: str = Form(""),
+    location: str = Form(""),
+    salary_range: str = Form(""),
+    employment_type: str = Form("full-time"),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    if user.role != "hr":
+        raise HTTPException(status_code=403)
+    
+    job = Job(
+        hr_id=user.id,
+        title=title,
+        description=description,
+        requirements=requirements,
+        skills_required=skills_required,
+        location=location,
+        salary_range=salary_range,
+        employment_type=employment_type
+    )
+    db.add(job)
+    db.commit()
+    return RedirectResponse("/profile", status_code=303)
+
+@app.post("/job/{job_id}/delete")
+async def delete_job(
+    job_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    if user.role != "hr":
+        raise HTTPException(status_code=403)
+    
+    job = db.query(Job).filter(Job.id == job_id, Job.hr_id == user.id).first()
+    if job:
+        db.delete(job)
+        db.commit()
+    return RedirectResponse("/profile", status_code=303)
+
+
+# ============================================================================
+# HR AI ANALYSIS ROUTES
+# ============================================================================
+
+@app.get("/hr/analyze-candidate/{candidate_id}", response_class=HTMLResponse)
+async def hr_analyze_candidate_get(
+    candidate_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    if user.role != "hr":
+        raise HTTPException(status_code=403)
+    
+    candidate = db.query(User).filter(User.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404)
+    
+    jobs = db.query(Job).filter(Job.hr_id == user.id, Job.is_active == True).all()
+    
+    jobs_options = ""
+    for job in jobs:
+        jobs_options += f'<option value="{job.id}">{job.title}</option>'
+    
+    if not jobs_options:
+        jobs_options = '<option value="">Сначала создайте вакансию</option>'
+    
+    content = f"""
+    <div class="container-sm">
+        <div style="margin-bottom: 32px;"><a href="/candidate/{candidate_id}" class="btn btn-outline">← Назад</a></div>
+        <h1>AI-анализ кандидата</h1>
+        <p class="text-muted">Кандидат: {candidate.full_name}</p>
+        
+        <form method="POST" action="/hr/analyze-candidate">
+            <input type="hidden" name="candidate_id" value="{candidate_id}">
+            <div class="card">
+                <div class="form-group">
+                    <label class="form-label">Выберите вакансию</label>
+                    <select name="job_id" class="form-control" required>
+                        {jobs_options}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-large">Анализировать</button>
+            </div>
+        </form>
+    </div>
+    """
+    return get_base_html("Анализ кандидата", content, user)
+
+@app.post("/hr/analyze-candidate")
+async def hr_analyze_candidate_post(
+    candidate_id: int = Form(...),
+    job_id: int = Form(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    if user.role != "hr":
+        raise HTTPException(status_code=403)
+    
+    candidate = db.query(User).filter(User.id == candidate_id).first()
+    job = db.query(Job).filter(Job.id == job_id).first()
+    
+    if not candidate or not job:
+        raise HTTPException(status_code=404)
+    
+    # Get candidate resume
+    resume_text = "Резюме не загружено"
+    if candidate.resume_file:
+        resume_path = Config.UPLOAD_DIR / "resumes" / candidate.resume_file
+        if resume_path.exists():
+            with open(resume_path, "rb") as f:
+                resume_content = f.read()
+                if candidate.resume_file.endswith('.pdf'):
+                    resume_text = parse_pdf(resume_content)
+                else:
+                    resume_text = parse_docx_file(resume_content)
+    
+    # AI Analysis
+    prompt = f"""
+МАКСИМАЛЬНО ДЕТАЛЬНЫЙ анализ кандидата для вакансии на русском языке.
+
+РЕЗЮМЕ: {resume_text}
+НАВЫКИ: {candidate.skills}
+
+ВАКАНСИЯ:
+Название: {job.title}
+Описание: {job.description}
+Требования: {job.requirements}
+Навыки: {job.skills_required}
+
+Верни ТОЛЬКО JSON:
+{{
+    "match_score": 0-100,
+    "strengths": ["7-10 сильных сторон с примерами"],
+    "weaknesses": ["7-10 слабых сторон"],
+    "missing_skills": ["недостающие навыки"],
+    "interview_questions": ["5-7 вопросов"],
+    "recommendations": ["рекомендации HR"],
+    "success_probability": "высокая/средняя/низкая",
+    "summary": "итог 2-3 предложения"
+}}
+"""
+    
+    analysis = {"match_score": 50, "strengths": ["Анализ..."], "weaknesses": ["..."], "missing_skills": [], "interview_questions": ["Расскажите о себе"], "recommendations": ["Оценка..."], "success_probability": "средняя", "summary": "Требуется оценка"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(Config.OLLAMA_API_URL, json={"model": Config.OLLAMA_MODEL, "prompt": prompt, "stream": False})
+            if response.status_code == 200:
+                result = response.json()
+                import json, re
+                json_match = re.search(r'\{.*\}', result.get("response", ""), re.DOTALL)
+                if json_match:
+                    analysis = json.loads(json_match.group())
+    except:
+        pass
+    
+    match_color = "#22c55e" if analysis['match_score'] >= 70 else "#eab308" if analysis['match_score'] >= 50 else "#ef4444"
+    
+    content = f'''
+    <div class="container">
+        <div style="margin-bottom: 32px;"><a href="/candidate/{candidate_id}" class="btn btn-outline">← Назад</a></div>
+        <h1>Результат анализа</h1>
+        <p class="text-muted">Кандидат: {candidate.full_name} | Вакансия: {job.title}</p>
+        
+        <div class="card" style="text-align: center;">
+            <h2 style="font-size: 64px; color: {match_color}; margin: 24px 0;">{analysis['match_score']}%</h2>
+            <p class="text-muted">Соответствие вакансии</p>
+            <p><strong>Вероятность успеха:</strong> {analysis['success_probability']}</p>
+        </div>
+        
+        <div class="card"><h3>Сильные стороны</h3><ul>{"".join([f"<li>{s}</li>" for s in analysis['strengths']])}</ul></div>
+        <div class="card"><h3>Слабые стороны</h3><ul>{"".join([f"<li>{w}</li>" for w in analysis['weaknesses']])}</ul></div>
+        <div class="card"><h3>Недостающие навыки</h3><ul>{"".join([f"<li>{m}</li>" for m in analysis['missing_skills']]) if analysis['missing_skills'] else "<li>Все ключевые навыки присутствуют</li>"}</ul></div>
+        <div class="card"><h3>Вопросы для собеседования</h3><ul>{"".join([f"<li>{q}</li>" for q in analysis['interview_questions']])}</ul></div>
+        <div class="card"><h3>Рекомендации</h3><ul>{"".join([f"<li>{r}</li>" for r in analysis['recommendations']])}</ul></div>
+        <div class="card"><h3>Итог</h3><p>{analysis['summary']}</p></div>
+    </div>
+    '''
+    
+    return get_base_html("Результат анализа", content, user)
+
+
+# ============================================================================
+# CHAT ROUTES
+# ============================================================================
+
+@app.get("/chat/{other_user_id}", response_class=HTMLResponse)
+async def chat_page(
+    other_user_id: int,
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    other = db.query(User).filter(User.id == other_user_id).first()
+    if not other:
+        raise HTTPException(status_code=404)
+    
+    messages = db.query(Message).filter(
+        ((Message.sender_id == user.id) & (Message.receiver_id == other_user_id)) |
+        ((Message.sender_id == other_user_id) & (Message.receiver_id == user.id))
+    ).order_by(Message.created_at.asc()).all()
+    
+    msgs_html = ""
+    for msg in messages:
+        is_mine = msg.sender_id == user.id
+        align = "right" if is_mine else "left"
+        bg = "rgba(255,255,255,0.1)" if is_mine else "rgba(255,255,255,0.05)"
+        msgs_html += f'<div style="text-align: {align}; margin-bottom: 12px;"><div style="display: inline-block; padding: 12px 16px; background: {bg}; border-radius: 12px; max-width: 70%;"><p>{msg.message}</p><p class="text-muted text-xs" style="margin-top: 4px;">{msg.created_at.strftime("%H:%M")}</p></div></div>'
+    
+    content = f"""
+    <div class="container-sm">
+        <h1>Чат с {other.full_name}</h1>
+        <div class="card" style="min-height: 400px; max-height: 600px; overflow-y: auto;" id="messages">{msgs_html}</div>
+        <form method="POST" action="/chat/send" style="margin-top: 16px;">
+            <input type="hidden" name="receiver_id" value="{other_user_id}">
+            <div style="display: flex; gap: 12px;">
+                <input type="text" name="message" class="form-control" required placeholder="Напишите сообщение...">
+                <button type="submit" class="btn btn-primary">Отправить</button>
+            </div>
+        </form>
+    </div>
+    """
+    return get_base_html(f"Чат с {other.full_name}", content, user)
+
+@app.post("/chat/send")
+async def send_message(
+    receiver_id: int = Form(...),
+    message: str = Form(...),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    msg = Message(sender_id=user.id, receiver_id=receiver_id, message=message)
+    db.add(msg)
+    db.commit()
+    return RedirectResponse(f"/chat/{receiver_id}", status_code=303)
+
+
+# ============================================================================
+# REVIEW ROUTES
+# ============================================================================
+
+@app.post("/review/create")
+async def create_review(
+    reviewee_id: int = Form(...),
+    rating: int = Form(...),
+    comment: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    review = Review(reviewer_id=user.id, reviewee_id=reviewee_id, rating=rating, comment=comment)
+    db.add(review)
+    
+    # Update average rating
+    reviewee = db.query(User).filter(User.id == reviewee_id).first()
+    all_reviews = db.query(Review).filter(Review.reviewee_id == reviewee_id).all()
+    reviewee.average_rating = sum(r.rating for r in all_reviews) / len(all_reviews)
+    reviewee.total_reviews = len(all_reviews)
+    
+    db.commit()
+    return RedirectResponse("/profile", status_code=303)
+
+
+# ============================================================================
+# PORTFOLIO ROUTES (for candidates)
+# ============================================================================
+
+@app.post("/portfolio/add")
+async def add_portfolio(
+    title: str = Form(...),
+    description: str = Form(""),
+    project_url: str = Form(""),
+    technologies: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    portfolio = Portfolio(user_id=user.id, title=title, description=description, project_url=project_url, technologies=technologies)
+    db.add(portfolio)
+    db.commit()
+    return RedirectResponse("/profile", status_code=303)
+
+@app.post("/certificates/add")
+async def add_certificate(
+    title: str = Form(...),
+    issuer: str = Form(""),
+    issue_date: str = Form(""),
+    credential_url: str = Form(""),
+    user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    cert = Certificate(user_id=user.id, title=title, issuer=issuer, issue_date=issue_date, credential_url=credential_url)
+    db.add(cert)
+    db.commit()
+    return RedirectResponse("/profile", status_code=303)
 
 
 # ============================================================================
