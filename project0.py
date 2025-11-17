@@ -1,6 +1,6 @@
 """
-Project-0: AI-Powered MVP Generator
-Transform ideas into working prototypes with HTML, Tailwind CSS, and React.js
+Project-0: Professional AI MVP Platform
+Generate full-stack production-ready MVPs with Node.js, Database, and Modern UI
 Powered by Ollama GLM-4.6:cloud
 """
 
@@ -15,8 +15,9 @@ from typing import AsyncGenerator, List, Dict
 import time
 from datetime import datetime
 import re
+import base64
 
-app = FastAPI(title="Project-0", description="AI-Powered MVP Generator")
+app = FastAPI(title="Project-0", description="Professional AI MVP Platform")
 
 # CORS middleware
 app.add_middleware(
@@ -31,53 +32,162 @@ app.add_middleware(
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "glm-4.6:cloud"
 
-# System prompt for MVP generation
-SYSTEM_PROMPT = """You are Project-0, an AI MVP generator that transforms ideas into working prototypes.
+# Enhanced System Prompt for Real MVP Generation
+SYSTEM_PROMPT = """You are Project-0, a professional AI platform that creates REAL, PRODUCTION-READY MVPs.
 
-Your task:
-1. Listen to the user's idea (even if incomplete)
-2. Fill in missing details creatively and logically
-3. Generate a complete, beautiful MVP using HTML, Tailwind CSS, and React.js
-4. Create production-ready, responsive, modern UI
+Your task: Generate complete, working full-stack applications that can be deployed immediately.
 
-Rules:
-- ALWAYS use Tailwind CSS for styling (CDN link included)
-- ALWAYS use React (from CDN)
-- Create COMPLETE, WORKING code that runs immediately
-- Make it beautiful, modern, and professional
-- Add animations, transitions, hover effects
-- Make it fully responsive
-- Use modern color schemes (gradients, shadows)
-- Include all necessary functionality
-- Add placeholder data if needed
-- Make it interactive and engaging
+## Architecture Requirements:
 
-If the idea is incomplete:
-- Imagine the best possible implementation
-- Add features that make sense
-- Create a compelling user experience
-- Fill in all gaps with creative solutions
+**Backend (Node.js):**
+- Use Express.js framework
+- Include proper routing
+- Add middleware (cors, body-parser, etc.)
+- Error handling and validation
+- Environment variables (.env)
+- Database connection and models
+- API endpoints (REST)
 
-Response Format:
-Use markdown with clear sections:
+**Database:**
+- Use SQLite for simplicity (or MongoDB for complex apps)
+- Include database schema
+- Proper models/schemas
+- Migration scripts if needed
+- Seed data examples
 
-## 📋 MVP Concept
-[Explain the idea and what you're building]
+**Frontend:**
+- Modern HTML5
+- Tailwind CSS for styling
+- Vanilla JavaScript or React.js
+- Responsive design
+- Beautiful UI with proper color scheme
+- Interactive components
+- Form validation
+- API integration
 
-## ✨ Features Included
-- Feature 1
-- Feature 2
-...
+## Color Schemes (Choose one that fits):
 
-## 💻 Implementation
-```html
-[Complete HTML+Tailwind+React code here]
+**Professional Blue:**
+- Primary: #2563eb (blue-600)
+- Secondary: #3b82f6 (blue-500)
+- Accent: #60a5fa (blue-400)
+- Dark: #1e40af (blue-800)
+
+**Success Green:**
+- Primary: #10b981 (emerald-500)
+- Secondary: #34d399 (emerald-400)
+- Accent: #6ee7b7 (emerald-300)
+- Dark: #059669 (emerald-600)
+
+**Modern Purple:**
+- Primary: #8b5cf6 (violet-500)
+- Secondary: #a78bfa (violet-400)
+- Accent: #c4b5fd (violet-300)
+- Dark: #7c3aed (violet-600)
+
+**Warm Orange:**
+- Primary: #f59e0b (amber-500)
+- Secondary: #fbbf24 (amber-400)
+- Accent: #fcd34d (amber-300)
+- Dark: #d97706 (amber-600)
+
+## Response Format (STRICT):
+
+Use markdown with code blocks for each file:
+
+## 📋 Project Overview
+[Brief description of the MVP and its purpose]
+
+## 🎨 Color Scheme
+**[Scheme Name]**
+- Primary: [color] - [usage]
+- Secondary: [color] - [usage]
+- Accent: [color] - [usage]
+
+## 🏗️ Architecture
+- Backend: Node.js + Express.js
+- Database: [SQLite/MongoDB]
+- Frontend: [HTML + Tailwind + JS/React]
+
+## ✨ Features
+- [List all implemented features]
+
+## 📁 Project Structure
+```
+project-name/
+├── backend/
+│   ├── server.js
+│   ├── package.json
+│   ├── .env
+│   └── ...
+├── frontend/
+│   └── index.html
+└── README.md
 ```
 
-## 🎯 How to Use
-[Brief instructions]
+## 💻 Code
 
-Always generate COMPLETE, WORKING code. No placeholders, no TODOs."""
+### Backend Files
+
+#### `backend/package.json`
+```json
+[Complete package.json with all dependencies]
+```
+
+#### `backend/server.js`
+```javascript
+[Complete Express.js server with all routes, middleware, database connection]
+```
+
+#### `backend/.env.example`
+```
+[Environment variables template]
+```
+
+#### `backend/database.js` (or models.js)
+```javascript
+[Database connection and models]
+```
+
+### Frontend Files
+
+#### `frontend/index.html`
+```html
+[Complete HTML with Tailwind CSS, proper structure, beautiful UI]
+```
+
+#### `frontend/app.js` (if separate)
+```javascript
+[Frontend JavaScript logic, API calls]
+```
+
+### Documentation
+
+#### `README.md`
+```markdown
+[Complete setup and deployment instructions]
+```
+
+## 🚀 Setup Instructions
+[Step-by-step guide to run the project]
+
+## 🎯 API Endpoints
+[List all API routes with examples]
+
+## 💾 Database Schema
+[Explain database structure]
+
+IMPORTANT RULES:
+1. Generate COMPLETE, WORKING code - no placeholders
+2. Use modern best practices
+3. Include proper error handling
+4. Make it production-ready
+5. Use consistent color scheme throughout
+6. Add beautiful UI with gradients, shadows, animations
+7. Make it fully responsive
+8. Include all necessary dependencies
+9. Add helpful comments
+10. Provide complete setup instructions"""
 
 class ChatMessage(BaseModel):
     role: str
@@ -90,12 +200,11 @@ class GenerateRequest(BaseModel):
 generated_mvps: Dict[str, Dict] = {}
 
 async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
-    """
-    Generate MVP using Ollama with streaming
-    """
+    """Generate real MVP with backend and frontend"""
+    
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Create a complete MVP for this idea: {idea}"}
+        {"role": "user", "content": f"Create a complete, production-ready MVP for: {idea}\n\nGenerate ALL files including backend (Node.js + Express), database setup, and frontend. Make it beautiful and fully functional."}
     ]
     
     try:
@@ -103,10 +212,16 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
             yield f"data: {json.dumps({'type': 'status', 'content': '🧠 Analyzing your idea...'})}\n\n"
             await asyncio.sleep(0.5)
             
-            yield f"data: {json.dumps({'type': 'status', 'content': '✨ Designing MVP architecture...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'content': '🏗️ Designing architecture...'})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Generating backend (Node.js + Express)...'})}\n\n"
             await asyncio.sleep(0.5)
             
             yield f"data: {json.dumps({'type': 'status', 'content': '🎨 Creating beautiful UI...'})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'status', 'content': '💾 Setting up database...'})}\n\n"
             await asyncio.sleep(0.5)
             
             # Stream response from Ollama
@@ -118,9 +233,9 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
                     "messages": messages,
                     "stream": True,
                     "options": {
-                        "temperature": 0.8,
-                        "top_p": 0.95,
-                        "num_ctx": 8192,
+                        "temperature": 0.7,
+                        "top_p": 0.9,
+                        "num_ctx": 16384,  # Larger context for more files
                     }
                 }
             ) as response:
@@ -135,17 +250,18 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
                                 yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
                             
                             if data.get("done", False):
-                                # Extract HTML code from response
-                                html_code = extract_html(full_response)
+                                # Extract files from response
+                                files = extract_project_files(full_response)
                                 mvp_id = str(int(time.time()))
+                                
                                 generated_mvps[mvp_id] = {
                                     "idea": idea,
-                                    "code": html_code,
+                                    "files": files,
                                     "markdown": full_response,
                                     "timestamp": datetime.now().isoformat()
                                 }
                                 
-                                yield f"data: {json.dumps({'type': 'done', 'mvp_id': mvp_id, 'has_code': bool(html_code)})}\n\n"
+                                yield f"data: {json.dumps({'type': 'done', 'mvp_id': mvp_id, 'file_count': len(files)})}\n\n"
                                 break
                         except json.JSONDecodeError:
                             continue
@@ -154,24 +270,26 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
         error_msg = f"Error: {str(e)}"
         yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
 
-def extract_html(markdown_text: str) -> str:
-    """Extract HTML code from markdown"""
-    # Find HTML code block
-    pattern = r'```html\n(.*?)\n```'
-    matches = re.findall(pattern, markdown_text, re.DOTALL)
-    if matches:
-        return matches[0].strip()
+def extract_project_files(markdown_text: str) -> Dict[str, str]:
+    """Extract all project files from markdown response"""
+    files = {}
     
-    # Try without language specifier
-    pattern = r'```\n(.*?)\n```'
+    # Pattern to match code blocks with filenames
+    # Matches: #### `filename.ext` followed by ```language\ncode\n```
+    pattern = r'####\s+`([^`]+)`\s*\n```(\w+)?\n(.*?)\n```'
     matches = re.findall(pattern, markdown_text, re.DOTALL)
-    if matches:
-        # Check if it looks like HTML
-        code = matches[0].strip()
-        if '<!DOCTYPE' in code or '<html' in code or '<div' in code:
-            return code
     
-    return ""
+    for filename, language, code in matches:
+        files[filename] = code.strip()
+    
+    # Also try simpler pattern
+    if not files:
+        pattern = r'```(\w+):([^\n]+)\n(.*?)\n```'
+        matches = re.findall(pattern, markdown_text, re.DOTALL)
+        for language, filename, code in matches:
+            files[filename.strip()] = code.strip()
+    
+    return files
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -180,35 +298,25 @@ async def root():
 
 @app.post("/api/generate")
 async def generate(request: GenerateRequest):
-    """
-    Generate MVP from idea with streaming
-    """
+    """Generate MVP from idea with streaming"""
     return StreamingResponse(
         generate_mvp(request.idea),
         media_type="text/event-stream"
     )
 
-@app.get("/api/preview/{mvp_id}")
-async def get_preview(mvp_id: str):
-    """Get preview HTML for generated MVP"""
+@app.get("/api/mvp/{mvp_id}")
+async def get_mvp(mvp_id: str):
+    """Get MVP details"""
     if mvp_id not in generated_mvps:
         return JSONResponse({"error": "MVP not found"}, status_code=404)
     
     mvp = generated_mvps[mvp_id]
     return JSONResponse({
-        "code": mvp["code"],
+        "files": mvp["files"],
         "markdown": mvp["markdown"],
-        "idea": mvp["idea"]
+        "idea": mvp["idea"],
+        "timestamp": mvp["timestamp"]
     })
-
-@app.get("/preview/{mvp_id}", response_class=HTMLResponse)
-async def preview_page(mvp_id: str):
-    """Render preview page"""
-    if mvp_id not in generated_mvps:
-        return "<h1>MVP not found</h1>"
-    
-    mvp = generated_mvps[mvp_id]
-    return mvp["code"] if mvp["code"] else "<h1>No HTML code generated</h1>"
 
 @app.get("/api/health")
 async def health():
@@ -220,14 +328,15 @@ async def health():
         "generated_mvps": len(generated_mvps)
     }
 
-# Main HTML Template
+# Enhanced HTML Template with Professional UI
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project-0 - AI MVP Generator</title>
+    <title>Project-0 - Professional AI MVP Platform</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -235,12 +344,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             box-sizing: border-box;
         }
 
+        :root {
+            --bg-primary: #000000;
+            --bg-secondary: #0a0a0a;
+            --bg-tertiary: #1a1a1a;
+            --border-color: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #666666;
+            
+            /* Professional Blue Theme */
+            --accent-primary: #2563eb;
+            --accent-secondary: #3b82f6;
+            --accent-light: #60a5fa;
+            --accent-dark: #1e40af;
+            
+            /* Success colors */
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
-            background: #000000;
-            color: #ffffff;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
             overflow: hidden;
+            line-height: 1.6;
         }
 
         .container {
@@ -248,27 +379,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             height: 100vh;
         }
 
-        /* Left Panel - Chat */
+        /* Chat Panel */
         .chat-panel {
-            width: 45%;
+            width: 50%;
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #333;
+            border-right: 1px solid var(--border-color);
+            background: var(--bg-primary);
         }
 
-        /* Right Panel - Preview */
+        /* Preview Panel */
         .preview-panel {
-            width: 55%;
+            width: 50%;
             display: flex;
             flex-direction: column;
-            background: #0a0a0a;
+            background: var(--bg-secondary);
         }
 
         /* Header */
         .header {
-            background: #000000;
-            border-bottom: 1px solid #333;
-            padding: 16px 24px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 28px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -277,190 +409,234 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
         }
 
         .logo-icon {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #ffffff 0%, #888888 100%);
-            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
-            color: #000;
+            font-weight: 800;
+            font-size: 20px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
 
         .logo-text {
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 22px;
+            font-weight: 700;
             letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .status-badge {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 6px;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             font-size: 13px;
+            font-weight: 500;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            background: #00ff00;
+            background: var(--success);
             border-radius: 50%;
             animation: pulse 2s infinite;
+            box-shadow: 0 0 8px var(--success);
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
         }
 
         /* Messages Area */
         .messages {
             flex: 1;
             overflow-y: auto;
-            padding: 24px;
+            padding: 28px;
         }
 
         .message {
-            margin-bottom: 24px;
-            animation: slideIn 0.3s ease-out;
+            margin-bottom: 28px;
+            animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .message-header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .message-role {
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
         }
 
-        .user-role { color: #ffffff; }
-        .ai-role { color: #888888; }
+        .user-role { color: var(--text-primary); }
+        .ai-role { color: var(--accent-secondary); }
 
         .message-content {
-            padding: 16px;
-            border-radius: 12px;
-            line-height: 1.6;
+            padding: 18px 20px;
+            border-radius: 14px;
+            line-height: 1.7;
             font-size: 14px;
         }
 
         .user-message .message-content {
-            background: #1a1a1a;
-            border: 1px solid #333;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
         }
 
         .ai-message .message-content {
-            background: #0a0a0a;
-            border: 1px solid #222;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
         }
 
         .status-indicator {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
             font-size: 13px;
-            color: #888;
-            margin-bottom: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            font-weight: 500;
         }
 
-        /* Markdown Styles */
+        /* Enhanced Markdown Styles */
+        .markdown-content {
+            color: var(--text-primary);
+        }
+
         .markdown-content h2 {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
-            margin: 20px 0 12px 0;
-            color: #fff;
+            margin: 24px 0 14px 0;
+            color: var(--text-primary);
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border-color);
         }
 
         .markdown-content h3 {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 600;
-            margin: 16px 0 8px 0;
-            color: #ccc;
+            margin: 20px 0 10px 0;
+            color: var(--text-secondary);
         }
 
-        .markdown-content ul {
-            margin: 8px 0 8px 20px;
+        .markdown-content h4 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 16px 0 8px 0;
+            color: var(--accent-secondary);
+        }
+
+        .markdown-content p {
+            margin: 10px 0;
+            color: var(--text-secondary);
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            margin: 12px 0 12px 24px;
         }
 
         .markdown-content li {
-            margin: 4px 0;
-            color: #aaa;
+            margin: 6px 0;
+            color: var(--text-secondary);
         }
 
         .markdown-content code {
-            background: #1a1a1a;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Monaco', monospace;
+            background: var(--bg-tertiary);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Menlo', monospace;
             font-size: 13px;
-            color: #00ff88;
+            color: var(--accent-light);
+            border: 1px solid var(--border-color);
         }
 
         .markdown-content pre {
-            background: #0d0d0d;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 18px;
             overflow-x: auto;
-            margin: 12px 0;
+            margin: 16px 0;
         }
 
         .markdown-content pre code {
             background: none;
             padding: 0;
-            color: #e0e0e0;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
         }
 
         .markdown-content strong {
-            color: #fff;
+            color: var(--text-primary);
             font-weight: 600;
         }
 
-        /* Preview Button */
-        .preview-button {
-            display: inline-block;
-            margin-top: 12px;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .markdown-content blockquote {
+            border-left: 3px solid var(--accent-primary);
+            padding-left: 16px;
+            margin: 16px 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Action Buttons */
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-weight: 600;
+            font-size: 14px;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
 
-        .preview-button:hover {
+        .action-button:hover {
             transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
         }
 
         /* Input Area */
         .input-area {
-            padding: 24px;
-            background: #000000;
-            border-top: 1px solid #333;
+            padding: 28px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
         }
 
         .input-wrapper {
@@ -469,99 +645,105 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         #ideaInput {
             width: 100%;
-            padding: 16px 60px 16px 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            color: #ffffff;
-            font-size: 14px;
+            padding: 18px 70px 18px 20px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 14px;
+            color: var(--text-primary);
+            font-size: 15px;
             font-family: inherit;
             resize: none;
             outline: none;
-            min-height: 80px;
-            max-height: 200px;
+            min-height: 90px;
+            max-height: 220px;
+            transition: all 0.3s;
+            font-weight: 400;
         }
 
         #ideaInput:focus {
-            border-color: #667eea;
+            border-color: var(--accent-primary);
+            background: var(--bg-secondary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         #ideaInput::placeholder {
-            color: #666;
+            color: var(--text-tertiary);
         }
 
         #generateBtn {
             position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #ffffff;
+            right: 14px;
+            bottom: 14px;
+            width: 46px;
+            height: 46px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 11px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
 
         #generateBtn:hover:not(:disabled) {
             transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
         }
 
         #generateBtn:disabled {
-            background: #333;
+            background: var(--bg-tertiary);
             cursor: not-allowed;
+            box-shadow: none;
         }
 
         /* Preview Panel */
         .preview-header {
-            padding: 16px 24px;
-            background: #0a0a0a;
-            border-bottom: 1px solid #222;
+            padding: 20px 28px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
         .preview-title {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 600;
-            color: #888;
+            color: var(--text-primary);
         }
 
         .preview-actions {
             display: flex;
-            gap: 8px;
+            gap: 10px;
         }
 
         .preview-btn {
-            padding: 8px 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            color: #fff;
+            padding: 10px 18px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
             font-size: 13px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .preview-btn:hover {
-            background: #222;
-            border-color: #555;
+            background: var(--bg-primary);
+            border-color: var(--accent-primary);
         }
 
-        .preview-frame {
+        .preview-content {
             flex: 1;
-            background: white;
-        }
-
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
+            overflow-y: auto;
+            padding: 28px;
         }
 
         .preview-placeholder {
@@ -570,32 +752,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #555;
+            color: var(--text-tertiary);
             text-align: center;
-            padding: 40px;
+            padding: 48px;
         }
 
         .placeholder-icon {
-            width: 80px;
-            height: 80px;
-            background: #1a1a1a;
-            border-radius: 16px;
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
-            margin-bottom: 16px;
+            font-size: 48px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
         }
 
         .placeholder-text {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
         }
 
         .placeholder-hint {
-            font-size: 14px;
-            color: #666;
+            font-size: 15px;
+            color: var(--text-secondary);
         }
 
         /* Welcome Screen */
@@ -605,92 +789,150 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             height: 100%;
-            padding: 40px;
+            padding: 48px;
             text-align: center;
         }
 
         .welcome-logo {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 36px;
-            color: #fff;
-            margin-bottom: 24px;
+            font-weight: 800;
+            font-size: 48px;
+            color: white;
+            margin-bottom: 28px;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
         }
 
         .welcome-title {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 12px;
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 14px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .welcome-subtitle {
-            font-size: 16px;
-            color: #888;
-            margin-bottom: 32px;
-            max-width: 400px;
+            font-size: 17px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            max-width: 480px;
+            line-height: 1.7;
         }
 
         .example-ideas {
             display: grid;
-            gap: 12px;
-            max-width: 500px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+            max-width: 600px;
             width: 100%;
         }
 
         .example-idea {
-            padding: 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
+            padding: 18px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             text-align: left;
         }
 
         .example-idea:hover {
-            background: #222;
-            border-color: #555;
-            transform: translateY(-2px);
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
         }
 
         .example-title {
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             font-size: 14px;
+            color: var(--text-primary);
         }
 
         .example-desc {
             font-size: 12px;
-            color: #888;
+            color: var(--text-secondary);
         }
 
+        /* File View */
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .file-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .file-header {
+            padding: 14px 18px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            font-family: 'Monaco', monospace;
+        }
+
+        .file-toggle {
+            color: var(--text-tertiary);
+            font-size: 18px;
+        }
+
+        .file-content {
+            padding: 0;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        .file-content pre {
+            margin: 0;
+            border-radius: 0;
+            border: none;
+        }
+
+        /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 10px;
+            height: 10px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #000;
+            background: var(--bg-primary);
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 4px;
+            background: var(--border-color);
+            border-radius: 5px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #444;
+            background: var(--text-tertiary);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Left Panel: Chat -->
+        <!-- Chat Panel -->
         <div class="chat-panel">
             <div class="header">
                 <div class="logo">
@@ -706,26 +948,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="messages" id="messages">
                 <div class="welcome">
                     <div class="welcome-logo">0</div>
-                    <div class="welcome-title">AI MVP Generator</div>
+                    <div class="welcome-title">Professional AI MVP Platform</div>
                     <div class="welcome-subtitle">
-                        Describe your idea and watch AI build a working prototype with HTML, Tailwind CSS, and React.js
+                        Generate production-ready full-stack applications with Node.js backend, database, and beautiful UI
                     </div>
                     <div class="example-ideas">
-                        <div class="example-idea" data-idea="Create a modern landing page for a SaaS product with pricing section, features, and testimonials">
-                            <div class="example-title">🚀 SaaS Landing Page</div>
-                            <div class="example-desc">Professional marketing page</div>
+                        <div class="example-idea" data-idea="Create a task management platform with user authentication, SQLite database, and real-time updates">
+                            <div class="example-title">📋 Task Manager</div>
+                            <div class="example-desc">Full CRUD with auth</div>
                         </div>
-                        <div class="example-idea" data-idea="Build a todo app with categories, due dates, and dark mode">
-                            <div class="example-title">✅ Todo Application</div>
-                            <div class="example-desc">Task management tool</div>
+                        <div class="example-idea" data-idea="Build a blog platform with user accounts, post creation, comments, and categories using MongoDB">
+                            <div class="example-title">📝 Blog Platform</div>
+                            <div class="example-desc">Multi-user blogging</div>
                         </div>
-                        <div class="example-idea" data-idea="Design a modern dashboard for analytics with charts and stats">
-                            <div class="example-title">📊 Analytics Dashboard</div>
-                            <div class="example-desc">Data visualization interface</div>
+                        <div class="example-idea" data-idea="Design an e-commerce product catalog with shopping cart, checkout, and order management">
+                            <div class="example-title">🛍️ E-commerce</div>
+                            <div class="example-desc">Shop with cart</div>
                         </div>
-                        <div class="example-idea" data-idea="Create an e-commerce product page with gallery, reviews, and cart">
-                            <div class="example-title">🛍️ E-commerce Page</div>
-                            <div class="example-desc">Online shopping interface</div>
+                        <div class="example-idea" data-idea="Create a real-time chat application with WebSocket support and message history">
+                            <div class="example-title">💬 Chat App</div>
+                            <div class="example-desc">Real-time messaging</div>
                         </div>
                     </div>
                 </div>
@@ -735,10 +977,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="input-wrapper">
                     <textarea 
                         id="ideaInput" 
-                        placeholder="Describe your MVP idea... AI will fill in the gaps and create a complete prototype!"
+                        placeholder="Describe your MVP idea in detail... AI will generate complete backend + frontend + database!"
                     ></textarea>
                     <button id="generateBtn">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                         </svg>
                     </button>
@@ -746,30 +988,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- Right Panel: Preview -->
+        <!-- Preview Panel -->
         <div class="preview-panel">
             <div class="preview-header">
-                <div class="preview-title">Live Preview</div>
+                <div class="preview-title">Project Files</div>
                 <div class="preview-actions">
-                    <button class="preview-btn" id="refreshBtn" style="display:none;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px;">
-                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                    <button class="preview-btn" id="downloadBtn" style="display:none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                         </svg>
-                        Refresh
-                    </button>
-                    <button class="preview-btn" id="newWindowBtn" style="display:none;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px;">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                        </svg>
-                        New Window
+                        Download All
                     </button>
                 </div>
             </div>
-            <div class="preview-frame" id="previewFrame">
+            <div class="preview-content" id="previewContent">
                 <div class="preview-placeholder">
                     <div class="placeholder-icon">✨</div>
                     <div class="placeholder-text">Ready to Build</div>
-                    <div class="placeholder-hint">Describe your idea to see it come to life</div>
+                    <div class="placeholder-hint">Describe your idea to generate a complete MVP</div>
                 </div>
             </div>
         </div>
@@ -781,9 +1017,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         var ideaInput = document.getElementById('ideaInput');
         var generateBtn = document.getElementById('generateBtn');
         var messagesDiv = document.getElementById('messages');
-        var previewFrame = document.getElementById('previewFrame');
-        var refreshBtn = document.getElementById('refreshBtn');
-        var newWindowBtn = document.getElementById('newWindowBtn');
+        var previewContent = document.getElementById('previewContent');
+        var downloadBtn = document.getElementById('downloadBtn');
 
         // Example ideas click handler
         document.addEventListener('DOMContentLoaded', function() {
@@ -800,15 +1035,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Auto-resize textarea
         ideaInput.addEventListener('input', function() {
             this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+            this.style.height = Math.min(this.scrollHeight, 220) + 'px';
         });
 
         // Generate button click
         generateBtn.addEventListener('click', generate);
 
-        // Enter to generate (Ctrl+Enter for new line)
+        // Enter to generate
         ideaInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 generate();
             }
@@ -888,23 +1123,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                                     } 
                                     else if (data.type === 'done') {
                                         currentMvpId = data.mvp_id;
-                                        if (data.has_code) {
-                                            showPreview(data.mvp_id);
-                                            
-                                            // Add preview button
-                                            var responseDiv = document.getElementById('currentResponse');
-                                            var previewBtn = document.createElement('button');
-                                            previewBtn.className = 'preview-button';
-                                            previewBtn.textContent = '👁️ View Live Preview';
-                                            previewBtn.onclick = function() {
-                                                showPreview(data.mvp_id);
-                                            };
-                                            responseDiv.appendChild(previewBtn);
+                                        if (data.file_count > 0) {
+                                            showFiles(data.mvp_id);
+                                            downloadBtn.style.display = 'flex';
                                         }
                                     } 
                                     else if (data.type === 'error') {
                                         var responseDiv = document.getElementById('currentResponse');
-                                        responseDiv.innerHTML = '<span style="color: #ff4444;">' + data.content + '</span>';
+                                        responseDiv.innerHTML = '<span style="color: var(--error);">' + data.content + '</span>';
                                     }
                                 } catch (e) {
                                     console.error('Parse error:', e);
@@ -925,14 +1151,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
-        function showPreview(mvpId) {
-            var iframe = document.createElement('iframe');
-            iframe.src = '/preview/' + mvpId;
-            previewFrame.innerHTML = '';
-            previewFrame.appendChild(iframe);
+        function showFiles(mvpId) {
+            fetch('/api/mvp/' + mvpId)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var files = data.files;
+                var html = '<div class="file-list">';
+                
+                for (var filename in files) {
+                    var content = files[filename];
+                    html += '<div class="file-item">' +
+                        '<div class="file-header" onclick="toggleFile(this)">' +
+                            '<span class="file-name">' + filename + '</span>' +
+                            '<span class="file-toggle">▼</span>' +
+                        '</div>' +
+                        '<div class="file-content" style="display:none;">' +
+                            '<pre><code>' + escapeHtml(content) + '</code></pre>' +
+                        '</div>' +
+                    '</div>';
+                }
+                
+                html += '</div>';
+                previewContent.innerHTML = html;
+            });
+        }
+
+        function toggleFile(header) {
+            var content = header.nextElementSibling;
+            var toggle = header.querySelector('.file-toggle');
             
-            refreshBtn.style.display = 'block';
-            newWindowBtn.style.display = 'block';
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = '▼';
+            }
         }
 
         function addMessage(role, content) {
@@ -956,17 +1210,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return div.innerHTML;
         }
 
-        // Refresh preview
-        refreshBtn.addEventListener('click', function() {
+        // Download all files
+        downloadBtn.addEventListener('click', function() {
             if (currentMvpId) {
-                showPreview(currentMvpId);
-            }
-        });
-
-        // Open in new window
-        newWindowBtn.addEventListener('click', function() {
-            if (currentMvpId) {
-                window.open('/preview/' + currentMvpId, '_blank');
+                fetch('/api/mvp/' + currentMvpId)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    // Create a simple text file with all code
+                    var content = '# Project Files\\n\\n';
+                    for (var filename in data.files) {
+                        content += '## ' + filename + '\\n```\\n' + data.files[filename] + '\\n```\\n\\n';
+                    }
+                    
+                    var blob = new Blob([content], {type: 'text/plain'});
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'project-files.txt';
+                    a.click();
+                });
             }
         });
 
@@ -983,10 +1245,13 @@ if __name__ == "__main__":
     print("""
     ╔═══════════════════════════════════════════════════════╗
     ║                                                       ║
-    ║         🚀 PROJECT-0 - AI MVP GENERATOR 🚀           ║
+    ║      🚀 PROJECT-0 PROFESSIONAL MVP PLATFORM 🚀       ║
     ║                                                       ║
-    ║   Transform Ideas → Working Prototypes               ║
-    ║   HTML + Tailwind CSS + React.js                     ║
+    ║   Generate Real MVPs with:                           ║
+    ║   • Node.js + Express Backend                        ║
+    ║   • SQLite/MongoDB Database                          ║
+    ║   • Modern UI with Official Colors                   ║
+    ║   • Production-Ready Code                            ║
     ║                                                       ║
     ║   Open: http://localhost:8000                        ║
     ║                                                       ║
