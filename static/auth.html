@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication - Project-0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px;
+            background: radial-gradient(ellipse at center, rgba(0, 102, 255, 0.08) 0%, transparent 60%);
+        }
+
+        .auth-box {
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 44px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .auth-title {
+            font-size: 30px;
+            font-weight: 800;
+            margin-bottom: 30px;
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .auth-form {
+            display: block;
+        }
+
+        .auth-form.hidden {
+            display: none;
+        }
+
+        .auth-button {
+            width: 100%;
+            padding: 15px;
+            background: var(--gradient-blue);
+            color: white;
+            border: none;
+            border-radius: 9px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-top: 8px;
+            box-shadow: var(--shadow-accent);
+        }
+
+        .auth-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px var(--accent-glow);
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 22px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .auth-switch a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .auth-switch a:hover {
+            color: var(--accent-light);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <div class="logo-container" style="justify-content: center; margin-bottom: 30px;">
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                        <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                    </svg>
+                </div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
+                <h2 class="auth-title">Welcome Back</h2>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" required id="loginEmail">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" required id="loginPassword">
+                </div>
+                <button type="submit" class="auth-button">Sign In</button>
+                <div class="auth-switch">
+                    Don't have an account? <a onclick="toggleAuth()">Sign up</a>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="auth-form hidden" onsubmit="handleRegister(event)">
+                <h2 class="auth-title">Create Account</h2>
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" required id="registerName">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" required id="registerEmail">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" required id="registerPassword" minlength="6">
+                </div>
+                <button type="submit" class="auth-button">Create Account</button>
+                <div class="auth-switch">
+                    Already have an account? <a onclick="toggleAuth()">Sign in</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Check if already logged in
+        const token = localStorage.getItem('token');
+        if (token) {
+            window.location.href = '/dashboard';
+        }
+
+        function toggleAuth() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            loginForm.classList.toggle('hidden');
+            registerForm.classList.toggle('hidden');
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Invalid credentials');
+                }
+            } catch (error) {
+                alert('Login failed: ' + error.message);
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, email, password})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Registration failed');
+                }
+            } catch (error) {
+                alert('Registration failed: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

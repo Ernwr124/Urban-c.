@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Project-0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .dashboard {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-nav {
+            padding: 18px 48px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-primary);
+            backdrop-filter: blur(10px);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            background: var(--gradient-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            box-shadow: var(--shadow-accent);
+        }
+
+        .dashboard-content {
+            flex: 1;
+            padding: 48px;
+            background: var(--bg-primary);
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 44px;
+        }
+
+        .dashboard-title {
+            font-size: 38px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 22px;
+        }
+
+        .project-card {
+            padding: 26px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .project-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-lg);
+            background: var(--bg-hover);
+        }
+
+        .project-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .project-desc {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 14px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.5;
+        }
+
+        .project-date {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 38px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-title {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 22px;
+            color: var(--text-primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 40px;
+            color: var(--text-tertiary);
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+            opacity: 0.7;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .empty-desc {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <nav class="dashboard-nav">
+            <div class="logo-container">
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                        <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                    </svg>
+                </div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            <div class="user-info">
+                <span id="userName" style="color: var(--text-secondary); font-size: 14px;"></span>
+                <div class="user-avatar" id="userAvatar"></div>
+                <button class="btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </nav>
+        
+        <div class="dashboard-content">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Your Projects</h1>
+                <button class="btn-primary" onclick="showCreateModal()">
+                    <span style="font-size: 18px;">+</span> New Project
+                </button>
+            </div>
+            <div class="projects-grid" id="projectsGrid">
+                <div class="empty-state">
+                    <div class="empty-icon">⏳</div>
+                    <div class="empty-title">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Create New Project</h2>
+            <form onsubmit="createProject(event)">
+                <div class="form-group">
+                    <label class="form-label">Project Name</label>
+                    <input type="text" class="form-input" required id="projectName" placeholder="My Awesome Project">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / Requirements</label>
+                    <textarea class="form-input" required id="projectDesc" style="min-height:120px;resize:vertical;" placeholder="Describe your MVP in detail..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary" style="flex: 1;">Create Project</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Check auth
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+            window.location.href = '/auth';
+        }
+
+        // Display user info
+        document.getElementById('userName').textContent = user.name || '';
+        document.getElementById('userAvatar').textContent = (user.name || '?')[0].toUpperCase();
+
+        // Load projects
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects?token=' + token);
+                const data = await response.json();
+                
+                const grid = document.getElementById('projectsGrid');
+                
+                if (data.projects.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <div class="empty-icon">📁</div>
+                            <div class="empty-title">No projects yet</div>
+                            <div class="empty-desc">Create your first project to get started</div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = data.projects.map(p => `
+                    <div class="project-card" onclick="openProject(${p.id}, '${escapeHtml(p.name)}')">
+                        <div class="project-name">${escapeHtml(p.name)}</div>
+                        <div class="project-desc">${escapeHtml(p.description)}</div>
+                        <div class="project-date">Created ${new Date(p.created_at).toLocaleDateString()}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+                alert('Failed to load projects');
+            }
+        }
+
+        function showCreateModal() {
+            document.getElementById('createModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('createModal').classList.remove('active');
+        }
+
+        async function createProject(e) {
+            e.preventDefault();
+            const name = document.getElementById('projectName').value;
+            const description = document.getElementById('projectDesc').value;
+            
+            try {
+                const response = await fetch('/api/projects?token=' + token, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, description})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    closeModal();
+                    window.location.href = '/chat?project=' + data.project_id;
+                }
+            } catch (error) {
+                alert('Failed to create project: ' + error.message);
+            }
+        }
+
+        function openProject(projectId, projectName) {
+            window.location.href = '/chat?project=' + projectId;
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout?token=' + token, {method: 'POST'});
+            } catch(e) {}
+            localStorage.clear();
+            window.location.href = '/';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load on start
+        loadProjects();
+    </script>
+</body>
+</html>
