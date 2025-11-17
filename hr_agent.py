@@ -431,19 +431,27 @@ async def call_ollama_analysis(prompt: str) -> Dict:
         }
 
 
-async def analyze_resume(resume_text: str, job_context: str) -> Dict:
+async def analyze_resume(resume_text: str, job_context: str, candidate_skills: str) -> Dict:
     structured_prompt = f"""
-    Resume:
+    Resume Extract (verbatim from candidate docs):
     {resume_text[:4000]}
 
-    Job Context:
+    Candidate Skill Summary (optional free-form from candidate):
+    {candidate_skills or 'Not provided'}
+
+    Vacancy / job requirements description:
     {job_context or 'Not specified'}
+
+    IMPORTANT INSTRUCTIONS:
+    1. Consider ONLY the skills, achievements, and experiences explicitly present in the resume extract or the candidate skill summary. Do not assume missing abilities.
+    2. When highlighting weaknesses or missing skills, reference only requirements from the vacancy that are not evidenced in the resume or skill summary.
+    3. Keep the evaluation factual, grounded, and free from speculation.
 
     Produce valid JSON with the keys:
     match_score (0-100),
     strengths (list of strings),
     weaknesses (list of strings),
-    skills_match (object with core and missing lists),
+    skills_match (object with "core" and "missing" lists),
     experience_assessment (string),
     education_assessment (string),
     development_plan (list of strings),
@@ -736,6 +744,10 @@ def upload_page(
                 <label>Контекст вакансии / требования</label>
                 <textarea name="job_context" placeholder="Требования вакансии, ключевые навыки, условия..."></textarea>
             </div>
+            <div>
+                <label>Кратко опишите свои навыки (необязательно, но поможет точности)</label>
+                <textarea name="candidate_skills" placeholder="Например: React, FastAPI, продуктовая аналитика, подбор команд..."></textarea>
+            </div>
             <button type="submit">Анализировать</button>
         </form>
     </section>
@@ -748,12 +760,13 @@ async def upload_resume(
     request: Request,
     resume: UploadFile = File(...),
     job_context: str = Form(""),
+    candidate_skills: str = Form(""),
     user: User = Depends(lambda req=Depends(get_current_user): require_login(req)),
     db: Session = Depends(get_db),
 ):
     file_path = save_uploaded_file(resume)
     resume_text = extract_text_from_file(file_path)
-    analysis_data = await analyze_resume(resume_text, job_context)
+    analysis_data = await analyze_resume(resume_text, job_context, candidate_skills)
     analysis = Analysis(
         user_id=user.id,
         file_name=resume.filename,
