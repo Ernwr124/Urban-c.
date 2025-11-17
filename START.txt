@@ -1,292 +1,266 @@
-
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║    🚀 PROJECT-0 PROFESSIONAL MVP PLATFORM 🚀                  ║
-║                                                                ║
-║      Generate REAL Full-Stack Applications!                   ║
+║         🚀 PROJECT-0 - QUICK START GUIDE 🚀                   ║
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎯 ЧТО ТЕПЕРЬ СОЗДАЁТ AI:
-
-   ✅ Node.js Backend (Express.js)
-      • REST API с роутингом
-      • Middleware (CORS, body-parser, error handling)
-      • Security best practices
-      • Environment variables
-   
-   ✅ База данных (SQLite или MongoDB)
-      • Database connection
-      • Models/Schemas
-      • CRUD операции
-      • Seed data для тестов
-   
-   ✅ Frontend (HTML + Tailwind + JS)
-      • Semantic HTML5
-      • Responsive design с Tailwind CSS
-      • API integration
-      • Form validation
-      • Loading states
-   
-   ✅ Полная документация
-      • README.md с инструкциями
-      • Setup guide
-      • Deployment instructions
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🚀 БЫСТРЫЙ СТАРТ:
-
-   1. Запустите платформу:
-      python project0.py
-   
-   2. Откройте браузер:
-      http://localhost:8000
-   
-   3. Опишите MVP (например):
-      "Создай task manager с аутентификацией пользователей,
-       SQLite базой данных, и красивым UI"
-   
-   4. Нажмите ⚡ Generate (или Ctrl+Enter)
-   
-   5. Получите полный проект:
-      • backend/server.js
-      • backend/package.json
-      • backend/database.js
-      • frontend/index.html
-      • README.md
-   
-   6. Разверните MVP:
-      cd backend
-      npm install
-      npm start
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎨 ОФИЦИАЛЬНЫЕ ЦВЕТОВЫЕ СХЕМЫ:
-
-   AI выбирает одну из 4 схем для каждого проекта:
-
-   1. 💙 Professional Blue (по умолчанию)
-      Primary: #2563eb
-      Secondary: #3b82f6
-      Accent: #60a5fa
-   
-   2. 💚 Success Green
-      Primary: #10b981
-      Secondary: #34d399
-      Accent: #6ee7b7
-   
-   3. 💜 Modern Purple
-      Primary: #8b5cf6
-      Secondary: #a78bfa
-      Accent: #c4b5fd
-   
-   4. 🧡 Warm Orange
-      Primary: #f59e0b
-      Secondary: #fbbf24
-      Accent: #fcd34d
-
-   Все цвета используются через CSS Variables!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎨 ПРОФЕССИОНАЛЬНЫЙ UI:
-
-   ✨ Современный дизайн:
-      • Inter font (Google Fonts)
-      • Split-screen layout (50/50)
-      • Gradient buttons с тенями
-      • Smooth animations
-      • Professional spacing
-   
-   🎨 Темная тема:
-      • #000000 - основной фон
-      • #0a0a0a - вторичный
-      • #1a1a1a - карточки
-      • #2a2a2a - границы
-   
-   ✨ Компоненты:
-      • Enhanced markdown rendering
-      • Collapsible file viewer
-      • Status indicators
-      • Action buttons
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 ПРИМЕРЫ ЗАПРОСОВ:
-
-   📋 Task Manager:
-   "Создай платформу управления задачами с регистрацией
-    пользователей, SQLite базой, категориями задач"
-   
-   → AI создаст:
-     ✓ Express API с JWT auth
-     ✓ SQLite models (Users, Tasks, Categories)
-     ✓ CRUD endpoints
-     ✓ Beautiful UI с drag & drop
-   
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   
-   📝 Blog Platform:
-   "Построй блог-платформу с аккаунтами, постами,
-    комментариями, MongoDB"
-   
-   → AI создаст:
-     ✓ MongoDB backend
-     ✓ User, Post, Comment models
-     ✓ Rich text editor
-     ✓ Modern blog UI
-   
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   
-   🛍️ E-commerce:
-   "Дизайн магазина с каталогом продуктов, корзиной,
-    заказами, и поиском"
-   
-   → AI создаст:
-     ✓ Product catalog API
-     ✓ Shopping cart logic
-     ✓ Order management
-     ✓ Modern shop UI
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📁 СТРУКТУРА ГЕНЕРИРУЕМОГО ПРОЕКТА:
-
-   project-name/
-   ├── backend/
-   │   ├── package.json       ← Dependencies (express, cors, etc.)
-   │   ├── server.js          ← Express server
-   │   ├── database.js        ← DB connection & models
-   │   ├── .env.example       ← Environment variables
-   │   └── routes/            ← API endpoints (если много)
-   │
-   ├── frontend/
-   │   ├── index.html         ← Main HTML + Tailwind
-   │   └── app.js             ← Frontend logic (optional)
-   │
-   └── README.md              ← Setup & deployment guide
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎯 ИНТЕРФЕЙС ПЛАТФОРМЫ:
-
-   ┌──────────────────────────┬─────────────────────────────┐
-   │     CHAT PANEL (50%)     │     FILES PANEL (50%)       │
-   │                          │                             │
-   │  Project-0 Logo          │  Project Files              │
-   │  [AI Ready Badge]        │  [Download All Button]      │
-   ├──────────────────────────┼─────────────────────────────┤
-   │                          │                             │
-   │  Welcome Screen:         │  File List:                 │
-   │  • Professional logo     │  📁 backend/server.js       │
-   │  • Description           │  📁 backend/package.json    │
-   │  • 4 example ideas       │  📁 backend/database.js     │
-   │                          │  📁 frontend/index.html     │
-   │  Chat Messages:          │  📁 README.md               │
-   │  • User requests         │                             │
-   │  • AI responses          │  (Click to expand/collapse) │
-   │  • Enhanced markdown     │                             │
-   │  • Status updates        │                             │
-   │                          │                             │
-   ├──────────────────────────┤                             │
-   │  Enhanced Textarea       │                             │
-   │  [⚡ Generate Button]    │                             │
-   └──────────────────────────┴─────────────────────────────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚙️ ТРЕБОВАНИЯ:
+📋 PREREQUISITES:
 
    1. Python 3.8+
-      pip install -r requirements.txt
-   
-   2. Ollama с GLM-4.6:cloud
-      ollama serve
-      ollama pull glm-4.6:cloud
-   
-   3. Node.js (для запуска сгенерированных MVP)
-      https://nodejs.org/
+   2. Ollama running
+   3. GLM-4.6:cloud model
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔧 КАК РАЗВЕРНУТЬ СГЕНЕРИРОВАННЫЙ MVP:
+🔧 SETUP:
 
-   После генерации:
-   
-   1. Download All (кнопка в Files Panel)
-   
-   2. Создайте проект структуру:
-      mkdir my-mvp
-      cd my-mvp
-      # Создайте папки и файлы из скачанного
-   
-   3. Установите backend зависимости:
-      cd backend
-      npm install
-   
-   4. Настройте environment:
-      cp .env.example .env
-      nano .env  # Отредактируйте переменные
-   
-   5. Запустите backend:
-      npm start
-      # Backend запустится на http://localhost:3000
-   
-   6. Откройте frontend:
-      cd ../frontend
-      open index.html  # Или используйте live-server
+   # Install dependencies
+   pip install fastapi uvicorn httpx pydantic
+
+   # Start Ollama (in separate terminal)
+   ollama serve
+
+   # Pull model
+   ollama pull glm-4.6:cloud
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📖 ДОКУМЕНТАЦИЯ:
+🚀 RUN:
 
-   README.md            - Главное руководство
-   requirements.txt     - Python зависимости
+   python project0.py
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💻 ТЕХНОЛОГИИ:
-
-   Platform:
-   • FastAPI - веб-фреймворк
-   • Ollama GLM-4.6 - AI модель
-   • Server-Sent Events - streaming
-   
-   Generated Backend:
-   • Node.js - runtime
-   • Express.js - веб-фреймворк
-   • SQLite / MongoDB - database
-   • CORS, body-parser - middleware
-   
-   Generated Frontend:
-   • HTML5 - structure
-   • Tailwind CSS - styling
-   • JavaScript / React - logic
+   → Open: http://localhost:8000
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ ЧТО НОВОГО:
+💡 USAGE FLOW:
 
-   ✓ Node.js backend generation
-   ✓ Database integration (SQLite/MongoDB)
-   ✓ Professional UI design
-   ✓ 4 official color schemes
-   ✓ Enhanced markdown rendering
-   ✓ Multiple file generation
-   ✓ File viewer with collapse/expand
-   ✓ Download all files function
-   ✓ Production-ready code
-   ✓ Complete documentation
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 1. LANDING PAGE                                             │
+   │    → Click "Try It Now"                                     │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 2. AUTHENTICATION                                           │
+   │                                                             │
+   │    Register:                                                │
+   │    • Name: John Doe                                         │
+   │    • Email: john@example.com                                │
+   │    • Password: ********                                     │
+   │                                                             │
+   │    Or Login if you have account                             │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 3. DASHBOARD                                                │
+   │                                                             │
+   │    Your Projects (Grid View)                                │
+   │    [Project Card] [Project Card] [Project Card]             │
+   │                                                             │
+   │    → Click "+ New Project"                                  │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 4. CREATE PROJECT                                           │
+   │                                                             │
+   │    Project Name: Task Manager                               │
+   │                                                             │
+   │    Description:                                             │
+   │    Build a task management app with:                        │
+   │    - User authentication                                    │
+   │    - SQLite database                                        │
+   │    - CRUD operations                                        │
+   │    - Beautiful Tailwind CSS UI                              │
+   │    - Responsive design                                      │
+   │                                                             │
+   │    → Click "Create Project"                                 │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 5. AI CHAT INTERFACE                                        │
+   │                                                             │
+   │  ┌──────────────────────┬──────────────────────────┐       │
+   │  │ CHAT (55%)           │ PREVIEW (45%)            │       │
+   │  ├──────────────────────┼──────────────────────────┤       │
+   │  │                      │                          │       │
+   │  │ You:                 │  [Live Preview]          │       │
+   │  │ "Create the task     │                          │       │
+   │  │  manager..."         │  or                      │       │
+   │  │                      │                          │       │
+   │  │ AI:                  │  [File List]             │       │
+   │  │ "Generating..."      │  • backend/server.js     │       │
+   │  │ [Code files]         │  • frontend/index.html   │       │
+   │  │                      │  • README.md             │       │
+   │  │ [Input Area]         │                          │       │
+   │  │ ┌─────────────────┐  │  [Download ZIP]          │       │
+   │  │ │ Message...    ⚡│  │                          │       │
+   │  │ └─────────────────┘  │                          │       │
+   │  └──────────────────────┴──────────────────────────┘       │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 6. MODIFY/EDIT                                              │
+   │                                                             │
+   │    You: "Add dark mode toggle to the UI"                    │
+   │                                                             │
+   │    AI: [Remembers project context]                          │
+   │        [Updates existing code]                              │
+   │        [Maintains consistency]                              │
+   │                                                             │
+   │    → Live preview updates!                                  │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 7. DOWNLOAD PROJECT                                         │
+   │                                                             │
+   │    → Click "Download ZIP"                                   │
+   │    → Get "task-manager.zip"                                 │
+   │                                                             │
+   │    Contents:                                                │
+   │    ├── backend/                                             │
+   │    │   ├── server.js                                        │
+   │    │   ├── package.json                                     │
+   │    │   ├── database.js                                      │
+   │    │   └── .env.example                                     │
+   │    ├── frontend/                                            │
+   │    │   └── index.html                                       │
+   │    ├── README.md                                            │
+   │    ├── start.sh         ← RUN THIS!                         │
+   │    └── start.bat        ← Windows                           │
+   └─────────────────────────────────────────────────────────────┘
+                                ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 8. RUN DOWNLOADED PROJECT                                   │
+   │                                                             │
+   │    unzip task-manager.zip                                   │
+   │    cd task-manager                                          │
+   │    chmod +x start.sh                                        │
+   │    ./start.sh                                               │
+   │                                                             │
+   │    → Backend starts automatically!                          │
+   │    → Open frontend/index.html in browser                    │
+   │    → Your MVP is LIVE! 🎉                                   │
+   └─────────────────────────────────────────────────────────────┘
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎉 ГОТОВО! СОЗДАВАЙТЕ НАСТОЯЩИЕ MVP! 🎉
+✨ KEY FEATURES:
 
-   От идеи до production-ready приложения за минуты!
+   🎨 Landing Page
+      • Hero section with gradient title
+      • Feature showcase (4 cards)
+      • Professional design
+
+   🔐 Authentication
+      • Secure registration
+      • Password encryption (SHA-256)
+      • Persistent sessions
+
+   📊 Dashboard
+      • Project grid view
+      • Create/manage projects
+      • User profile
+
+   🤖 AI Chat
+      • Context memory
+      • Incremental updates
+      • Real-time streaming
+      • Professional responses
+
+   👁️ Live Preview
+      • iframe preview (no server!)
+      • File viewer
+      • Collapsible sections
+
+   📦 ZIP Download
+      • Complete project files
+      • Auto-run scripts
+      • Ready to deploy
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+📝 EXAMPLE PROMPTS:
+
+   1. Task Manager:
+      "Create a task management app with user authentication,
+       SQLite database, CRUD operations for tasks, categories,
+       due dates, and a beautiful Tailwind CSS UI with dark mode"
+
+   2. Blog Platform:
+      "Build a blog platform with posts, comments, categories,
+       rich text editor, image uploads, and user profiles"
+
+   3. E-commerce:
+      "Create an e-commerce site with products, shopping cart,
+       checkout, user authentication, and order management"
+
+   4. Chat App:
+      "Build a real-time chat application with rooms, private
+       messages, user presence, and message history"
+
+   5. Dashboard:
+      "Create an analytics dashboard with charts, data tables,
+       filters, export functionality, and responsive design"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔥 PRO TIPS:
+
+   1. Be Specific:
+      ✅ "Create a task manager with user auth, SQLite, and Tailwind"
+      ❌ "Make a todo app"
+
+   2. Mention Technologies:
+      "Use Node.js, Express, SQLite, and Tailwind CSS"
+
+   3. Describe Features:
+      List all features you want clearly
+
+   4. Iterative Development:
+      Start simple, then ask AI to add features:
+      → "Now add dark mode"
+      → "Add export to CSV"
+      → "Add email notifications"
+
+   5. Use Context:
+      AI remembers your project!
+      "Update the login page to use OAuth"
+      "Refactor the database schema for better performance"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🐛 TROUBLESHOOTING:
+
+   Q: "AI not responding?"
+   A: Check if Ollama is running: ollama serve
+
+   Q: "Model not found?"
+   A: Pull the model: ollama pull glm-4.6:cloud
+
+   Q: "Can't login?"
+   A: Clear browser storage, try again
+
+   Q: "Download not working?"
+   A: Make sure project has generated files first
+
+   Q: "Preview not showing?"
+   A: Check if frontend/index.html exists
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 LEARN MORE:
+
+   README.md - Complete documentation
+   project0.py - Source code (1692 lines)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎉 START BUILDING AMAZING MVPs NOW!
+
+   python project0.py
+
+   Transform ideas into reality! ✨
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,21 +1,26 @@
 """
 Project-0: Professional AI MVP Platform
-Generate full-stack production-ready MVPs with Node.js, Database, and Modern UI
+Complete Full-Stack Application Generator with Authentication & Dashboard
 Powered by Ollama GLM-4.6:cloud
 """
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 import json
 import asyncio
-from typing import AsyncGenerator, List, Dict
+from typing import AsyncGenerator, List, Dict, Optional
 import time
 from datetime import datetime
 import re
-import base64
+import sqlite3
+import hashlib
+import secrets
+import io
+import zipfile
+import os
 
 app = FastAPI(title="Project-0", description="Professional AI MVP Platform")
 
@@ -31,200 +36,340 @@ app.add_middleware(
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "glm-4.6:cloud"
+DB_FILE = "project0.db"
 
-# Enhanced System Prompt for Real MVP Generation
-SYSTEM_PROMPT = """You are Project-0, a professional AI platform that creates REAL, PRODUCTION-READY MVPs.
+# Initialize Database
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    # Users table
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    
+    # Projects table
+    c.execute('''CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        context TEXT,
+        files TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )''')
+    
+    # Sessions table
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )''')
+    
+    conn.commit()
+    conn.close()
 
-Your task: Generate complete, working full-stack applications that can be deployed immediately.
+init_db()
 
-## Architecture Requirements:
+# Models
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
 
-**Backend (Node.js):**
-- Use Express.js framework
-- Include proper routing
-- Add middleware (cors, body-parser, etc.)
-- Error handling and validation
-- Environment variables (.env)
-- Database connection and models
-- API endpoints (REST)
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: str
+
+class ChatRequest(BaseModel):
+    project_id: int
+    message: str
+
+# Helper functions
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_session(user_id: int) -> str:
+    token = secrets.token_urlsafe(32)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
+    conn.commit()
+    conn.close()
+    return token
+
+def get_user_from_token(token: str) -> Optional[int]:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM sessions WHERE token = ?", (token,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+# Enhanced System Prompt for Project Context
+def get_system_prompt(project_context: str = "") -> str:
+    base_prompt = """You are Project-0 AI, a professional full-stack development assistant.
+
+Your capabilities:
+- Generate production-ready Node.js backends with Express
+- Create modern frontends with HTML, Tailwind CSS, and JavaScript/React
+- Design and implement databases (SQLite/MongoDB)
+- Write clean, documented, and tested code
+- Follow best practices and security standards
+- Provide complete project files ready for deployment
+
+Architecture Standards:
+**Backend (Node.js + Express):**
+- RESTful API design
+- Proper error handling and validation
+- CORS and security middleware
+- Environment variable configuration
+- Database models and migrations
 
 **Database:**
-- Use SQLite for simplicity (or MongoDB for complex apps)
-- Include database schema
-- Proper models/schemas
-- Migration scripts if needed
-- Seed data examples
+- Normalized schema design
+- Proper indexing
+- Connection pooling
+- CRUD operations
 
 **Frontend:**
-- Modern HTML5
-- Tailwind CSS for styling
-- Vanilla JavaScript or React.js
-- Responsive design
-- Beautiful UI with proper color scheme
-- Interactive components
-- Form validation
+- Responsive design (mobile-first)
+- Modern UI with Tailwind CSS
 - API integration
+- Form validation
+- Loading states and error handling
 
-## Color Schemes (Choose one that fits):
+**Code Quality:**
+- Clear variable/function names
+- Comprehensive comments
+- Error boundaries
+- Input sanitization
+- Security best practices
 
-**Professional Blue:**
-- Primary: #2563eb (blue-600)
-- Secondary: #3b82f6 (blue-500)
-- Accent: #60a5fa (blue-400)
-- Dark: #1e40af (blue-800)
+Color Schemes (choose appropriate):
+- Professional Blue: #2563eb, #3b82f6, #60a5fa
+- Success Green: #10b981, #34d399, #6ee7b7
+- Modern Purple: #8b5cf6, #a78bfa, #c4b5fd
+- Warm Orange: #f59e0b, #fbbf24, #fcd34d
 
-**Success Green:**
-- Primary: #10b981 (emerald-500)
-- Secondary: #34d399 (emerald-400)
-- Accent: #6ee7b7 (emerald-300)
-- Dark: #059669 (emerald-600)
-
-**Modern Purple:**
-- Primary: #8b5cf6 (violet-500)
-- Secondary: #a78bfa (violet-400)
-- Accent: #c4b5fd (violet-300)
-- Dark: #7c3aed (violet-600)
-
-**Warm Orange:**
-- Primary: #f59e0b (amber-500)
-- Secondary: #fbbf24 (amber-400)
-- Accent: #fcd34d (amber-300)
-- Dark: #d97706 (amber-600)
-
-## Response Format (STRICT):
-
-Use markdown with code blocks for each file:
+Response Format:
+Generate ALL files with proper structure:
 
 ## 📋 Project Overview
-[Brief description of the MVP and its purpose]
-
-## 🎨 Color Scheme
-**[Scheme Name]**
-- Primary: [color] - [usage]
-- Secondary: [color] - [usage]
-- Accent: [color] - [usage]
+[Brief description]
 
 ## 🏗️ Architecture
-- Backend: Node.js + Express.js
+- Backend: Node.js + Express
 - Database: [SQLite/MongoDB]
-- Frontend: [HTML + Tailwind + JS/React]
+- Frontend: HTML + Tailwind + JS
 
-## ✨ Features
-- [List all implemented features]
+## 📁 Files
 
-## 📁 Project Structure
-```
-project-name/
-├── backend/
-│   ├── server.js
-│   ├── package.json
-│   ├── .env
-│   └── ...
-├── frontend/
-│   └── index.html
-└── README.md
-```
-
-## 💻 Code
-
-### Backend Files
-
-#### `backend/package.json`
+### backend/package.json
 ```json
-[Complete package.json with all dependencies]
+[Complete package.json]
 ```
 
-#### `backend/server.js`
+### backend/server.js
 ```javascript
-[Complete Express.js server with all routes, middleware, database connection]
+[Complete Express server]
 ```
 
-#### `backend/.env.example`
-```
-[Environment variables template]
-```
-
-#### `backend/database.js` (or models.js)
+### backend/database.js
 ```javascript
-[Database connection and models]
+[Database setup]
 ```
 
-### Frontend Files
+### backend/.env.example
+```
+[Environment variables]
+```
 
-#### `frontend/index.html`
+### frontend/index.html
 ```html
-[Complete HTML with Tailwind CSS, proper structure, beautiful UI]
+[Complete frontend]
 ```
 
-#### `frontend/app.js` (if separate)
-```javascript
-[Frontend JavaScript logic, API calls]
-```
-
-### Documentation
-
-#### `README.md`
+### README.md
 ```markdown
-[Complete setup and deployment instructions]
+[Setup instructions]
 ```
 
-## 🚀 Setup Instructions
-[Step-by-step guide to run the project]
+### start.sh
+```bash
+#!/bin/bash
+cd backend && npm install && npm start
+```
 
-## 🎯 API Endpoints
-[List all API routes with examples]
+IMPORTANT:
+- Generate COMPLETE, WORKING code
+- No placeholders or TODOs
+- Production-ready quality
+- All files must work together
+- Include error handling
+- Add security measures"""
 
-## 💾 Database Schema
-[Explain database structure]
-
-IMPORTANT RULES:
-1. Generate COMPLETE, WORKING code - no placeholders
-2. Use modern best practices
-3. Include proper error handling
-4. Make it production-ready
-5. Use consistent color scheme throughout
-6. Add beautiful UI with gradients, shadows, animations
-7. Make it fully responsive
-8. Include all necessary dependencies
-9. Add helpful comments
-10. Provide complete setup instructions"""
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class GenerateRequest(BaseModel):
-    idea: str
-
-# Store generated MVPs
-generated_mvps: Dict[str, Dict] = {}
-
-async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
-    """Generate real MVP with backend and frontend"""
+    if project_context:
+        base_prompt += f"\n\nPROJECT CONTEXT:\n{project_context}\n\nIMPORTANT: Remember this context for all subsequent requests about this project. Build upon previous work."
     
+    return base_prompt
+
+# API Endpoints
+
+@app.post("/api/register")
+async def register(req: RegisterRequest):
+    """Register new user"""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    try:
+        password_hash = hash_password(req.password)
+        c.execute("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+                 (req.name, req.email, password_hash))
+        conn.commit()
+        user_id = c.lastrowid
+        token = create_session(user_id)
+        
+        return {"success": True, "token": token, "user": {"id": user_id, "name": req.name, "email": req.email}}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    finally:
+        conn.close()
+
+@app.post("/api/login")
+async def login(req: LoginRequest):
+    """Login user"""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    password_hash = hash_password(req.password)
+    c.execute("SELECT id, name, email FROM users WHERE email = ? AND password_hash = ?",
+             (req.email, password_hash))
+    user = c.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_session(user[0])
+    return {"success": True, "token": token, "user": {"id": user[0], "name": user[1], "email": user[2]}}
+
+@app.get("/api/projects")
+async def get_projects(token: str):
+    """Get user projects"""
+    user_id = get_user_from_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, name, description, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC",
+             (user_id,))
+    projects = [{"id": row[0], "name": row[1], "description": row[2], "created_at": row[3], "updated_at": row[4]} 
+                for row in c.fetchall()]
+    conn.close()
+    
+    return {"projects": projects}
+
+@app.post("/api/projects")
+async def create_project(req: ProjectCreate, token: str):
+    """Create new project"""
+    user_id = get_user_from_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO projects (user_id, name, description, context) VALUES (?, ?, ?, ?)",
+             (user_id, req.name, req.description, ""))
+    conn.commit()
+    project_id = c.lastrowid
+    conn.close()
+    
+    return {"success": True, "project_id": project_id}
+
+@app.get("/api/project/{project_id}")
+async def get_project(project_id: int, token: str):
+    """Get project details"""
+    user_id = get_user_from_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, name, description, context, files FROM projects WHERE id = ? AND user_id = ?",
+             (project_id, user_id))
+    project = c.fetchone()
+    conn.close()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    files = json.loads(project[4]) if project[4] else {}
+    return {
+        "id": project[0],
+        "name": project[1],
+        "description": project[2],
+        "context": project[3],
+        "files": files
+    }
+
+@app.post("/api/chat")
+async def chat(req: ChatRequest, token: str):
+    """Chat with AI about project"""
+    user_id = get_user_from_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get project context
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT context, description FROM projects WHERE id = ? AND user_id = ?",
+             (req.project_id, user_id))
+    project = c.fetchone()
+    conn.close()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project_context = f"Project Description: {project[1]}\n\nPrevious Context: {project[0]}"
+    
+    return StreamingResponse(
+        generate_mvp_stream(req.message, req.project_id, user_id, project_context),
+        media_type="text/event-stream"
+    )
+
+async def generate_mvp_stream(message: str, project_id: int, user_id: int, context: str) -> AsyncGenerator[str, None]:
+    """Generate MVP with streaming and context"""
+    
+    system_prompt = get_system_prompt(context)
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Create a complete, production-ready MVP for: {idea}\n\nGenerate ALL files including backend (Node.js + Express), database setup, and frontend. Make it beautiful and fully functional."}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message}
     ]
     
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            yield f"data: {json.dumps({'type': 'status', 'content': '🧠 Analyzing your idea...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'content': '🧠 Analyzing request...'})}\n\n"
             await asyncio.sleep(0.5)
             
             yield f"data: {json.dumps({'type': 'status', 'content': '🏗️ Designing architecture...'})}\n\n"
             await asyncio.sleep(0.5)
             
-            yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Generating backend (Node.js + Express)...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Generating code...'})}\n\n"
             await asyncio.sleep(0.5)
             
-            yield f"data: {json.dumps({'type': 'status', 'content': '🎨 Creating beautiful UI...'})}\n\n"
-            await asyncio.sleep(0.5)
-            
-            yield f"data: {json.dumps({'type': 'status', 'content': '💾 Setting up database...'})}\n\n"
-            await asyncio.sleep(0.5)
-            
-            # Stream response from Ollama
             async with client.stream(
                 "POST",
                 OLLAMA_API_URL,
@@ -235,7 +380,7 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
                     "options": {
                         "temperature": 0.7,
                         "top_p": 0.9,
-                        "num_ctx": 16384,  # Larger context for more files
+                        "num_ctx": 16384,
                     }
                 }
             ) as response:
@@ -250,85 +395,88 @@ async def generate_mvp(idea: str) -> AsyncGenerator[str, None]:
                                 yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
                             
                             if data.get("done", False):
-                                # Extract files from response
+                                # Extract files and update project
                                 files = extract_project_files(full_response)
-                                mvp_id = str(int(time.time()))
                                 
-                                generated_mvps[mvp_id] = {
-                                    "idea": idea,
-                                    "files": files,
-                                    "markdown": full_response,
-                                    "timestamp": datetime.now().isoformat()
-                                }
+                                # Update project context and files
+                                conn = sqlite3.connect(DB_FILE)
+                                c = conn.cursor()
+                                new_context = context + f"\n\nUser: {message}\nAI: Generated files successfully."
+                                c.execute("UPDATE projects SET context = ?, files = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                         (new_context, json.dumps(files), project_id))
+                                conn.commit()
+                                conn.close()
                                 
-                                yield f"data: {json.dumps({'type': 'done', 'mvp_id': mvp_id, 'file_count': len(files)})}\n\n"
+                                yield f"data: {json.dumps({'type': 'done', 'files': files, 'file_count': len(files)})}\n\n"
                                 break
                         except json.JSONDecodeError:
                             continue
     
     except Exception as e:
-        error_msg = f"Error: {str(e)}"
-        yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
 def extract_project_files(markdown_text: str) -> Dict[str, str]:
-    """Extract all project files from markdown response"""
+    """Extract all files from markdown"""
     files = {}
     
-    # Pattern to match code blocks with filenames
-    # Matches: #### `filename.ext` followed by ```language\ncode\n```
-    pattern = r'####\s+`([^`]+)`\s*\n```(\w+)?\n(.*?)\n```'
+    # Pattern: ### filename\n```language\ncode\n```
+    pattern = r'###\s+([^\n]+)\s*\n```(?:\w+)?\n(.*?)\n```'
     matches = re.findall(pattern, markdown_text, re.DOTALL)
     
-    for filename, language, code in matches:
+    for filename, code in matches:
+        filename = filename.strip()
         files[filename] = code.strip()
     
-    # Also try simpler pattern
-    if not files:
-        pattern = r'```(\w+):([^\n]+)\n(.*?)\n```'
-        matches = re.findall(pattern, markdown_text, re.DOTALL)
-        for language, filename, code in matches:
-            files[filename.strip()] = code.strip()
+    # Add start script
+    files["start.sh"] = "#!/bin/bash\ncd backend\nnpm install\nnpm start"
+    files["start.bat"] = "@echo off\ncd backend\nnpm install\nnpm start"
     
     return files
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Serve the main application UI"""
-    return HTML_TEMPLATE
-
-@app.post("/api/generate")
-async def generate(request: GenerateRequest):
-    """Generate MVP from idea with streaming"""
+@app.get("/api/download/{project_id}")
+async def download_project(project_id: int, token: str):
+    """Download project as ZIP"""
+    user_id = get_user_from_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get project
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT name, files FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id))
+    project = c.fetchone()
+    conn.close()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    files = json.loads(project[1]) if project[1] else {}
+    
+    # Create ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, content in files.items():
+            zip_file.writestr(filename, content)
+    
+    zip_buffer.seek(0)
+    
     return StreamingResponse(
-        generate_mvp(request.idea),
-        media_type="text/event-stream"
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={project[0]}.zip"}
     )
 
-@app.get("/api/mvp/{mvp_id}")
-async def get_mvp(mvp_id: str):
-    """Get MVP details"""
-    if mvp_id not in generated_mvps:
-        return JSONResponse({"error": "MVP not found"}, status_code=404)
-    
-    mvp = generated_mvps[mvp_id]
-    return JSONResponse({
-        "files": mvp["files"],
-        "markdown": mvp["markdown"],
-        "idea": mvp["idea"],
-        "timestamp": mvp["timestamp"]
-    })
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Serve main application"""
+    return HTML_TEMPLATE
 
 @app.get("/api/health")
 async def health():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "model": MODEL_NAME,
-        "generated_mvps": len(generated_mvps)
-    }
+    """Health check"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# Enhanced HTML Template with Professional UI
+# Main HTML Template with Landing, Auth, Dashboard, and Chat
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -336,7 +484,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project-0 - Professional AI MVP Platform</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -352,125 +500,431 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --text-primary: #ffffff;
             --text-secondary: #a0a0a0;
             --text-tertiary: #666666;
-            
-            /* Professional Blue Theme */
             --accent-primary: #2563eb;
             --accent-secondary: #3b82f6;
             --accent-light: #60a5fa;
-            --accent-dark: #1e40af;
-            
-            /* Success colors */
             --success: #10b981;
             --warning: #f59e0b;
             --error: #ef4444;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
             line-height: 1.6;
         }
 
-        .container {
-            display: flex;
-            height: 100vh;
+        /* Hide all pages by default */
+        .page {
+            display: none;
         }
 
-        /* Chat Panel */
-        .chat-panel {
-            width: 50%;
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--border-color);
-            background: var(--bg-primary);
+        .page.active {
+            display: block;
         }
 
-        /* Preview Panel */
-        .preview-panel {
-            width: 50%;
+        /* Landing Page */
+        .landing {
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            background: var(--bg-secondary);
         }
 
-        /* Header */
-        .header {
-            background: var(--bg-primary);
+        .landing-nav {
+            padding: 24px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 1px solid var(--border-color);
-            padding: 20px 28px;
+        }
+
+        .logo-container {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 16px;
         }
 
         .logo {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            border-radius: 10px;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
-            font-size: 20px;
+            font-weight: 900;
+            font-size: 28px;
             color: white;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
         }
 
         .logo-text {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .status-badge {
+        .nav-actions button {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .nav-actions button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .landing-hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 48px;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 72px;
+            font-weight: 900;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
+        }
+
+        .hero-subtitle {
+            font-size: 24px;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+            max-width: 700px;
+            font-weight: 400;
+        }
+
+        .hero-cta {
+            padding: 18px 48px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+        }
+
+        .hero-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(37, 99, 235, 0.5);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            max-width: 1200px;
+            margin-top: 80px;
+        }
+
+        .feature-card {
+            padding: 32px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .feature-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .feature-desc {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        /* Auth Page */
+        .auth-container {
+            min-height: 100vh;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 16px;
+            justify-content: center;
+            padding: 48px;
+        }
+
+        .auth-box {
+            width: 100%;
+            max-width: 450px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 48px;
+        }
+
+        .auth-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .auth-button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+        }
+
+        .auth-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .auth-switch a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-nav {
+            padding: 20px 48px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .dashboard-content {
+            flex: 1;
+            padding: 48px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 48px;
+        }
+
+        .dashboard-title {
+            font-size: 42px;
+            font-weight: 800;
+        }
+
+        .create-project-btn {
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .project-card {
+            padding: 28px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .project-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .project-name {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .project-desc {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .project-date {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .chat-sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            font-size: 13px;
-            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
         }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--success);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            box-shadow: 0 0 8px var(--success);
+        .back-btn:hover {
+            background: var(--bg-primary);
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.9); }
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Messages Area */
-        .messages {
+        .chat-header {
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 28px;
+            padding: 32px;
         }
 
         .message {
             margin-bottom: 28px;
-            animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideIn 0.4s ease-out;
         }
 
         @keyframes slideIn {
@@ -481,13 +935,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .message-header {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 10px;
         }
 
         .message-role {
             font-weight: 600;
-            font-size: 13px;
+            font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.8px;
         }
@@ -496,10 +950,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .ai-role { color: var(--accent-secondary); }
 
         .message-content {
-            padding: 18px 20px;
+            padding: 20px;
             border-radius: 14px;
             line-height: 1.7;
-            font-size: 14px;
+            font-size: 15px;
         }
 
         .user-message .message-content {
@@ -512,138 +966,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid var(--border-color);
         }
 
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 14px;
-            font-weight: 500;
-        }
-
-        /* Enhanced Markdown Styles */
-        .markdown-content {
-            color: var(--text-primary);
-        }
-
-        .markdown-content h2 {
-            font-size: 20px;
-            font-weight: 700;
-            margin: 24px 0 14px 0;
-            color: var(--text-primary);
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .markdown-content h3 {
-            font-size: 17px;
-            font-weight: 600;
-            margin: 20px 0 10px 0;
-            color: var(--text-secondary);
-        }
-
-        .markdown-content h4 {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 16px 0 8px 0;
-            color: var(--accent-secondary);
-        }
-
-        .markdown-content p {
-            margin: 10px 0;
-            color: var(--text-secondary);
-        }
-
-        .markdown-content ul, .markdown-content ol {
-            margin: 12px 0 12px 24px;
-        }
-
-        .markdown-content li {
-            margin: 6px 0;
-            color: var(--text-secondary);
-        }
-
-        .markdown-content code {
-            background: var(--bg-tertiary);
-            padding: 3px 8px;
-            border-radius: 5px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 13px;
-            color: var(--accent-light);
-            border: 1px solid var(--border-color);
-        }
-
-        .markdown-content pre {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 18px;
-            overflow-x: auto;
-            margin: 16px 0;
-        }
-
-        .markdown-content pre code {
-            background: none;
-            padding: 0;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .markdown-content strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .markdown-content blockquote {
-            border-left: 3px solid var(--accent-primary);
-            padding-left: 16px;
-            margin: 16px 0;
-            color: var(--text-secondary);
-            font-style: italic;
-        }
-
-        /* Action Buttons */
-        .action-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 14px;
-            padding: 12px 20px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-        }
-
-        .action-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
-        }
-
-        /* Input Area */
-        .input-area {
-            padding: 28px;
-            background: var(--bg-primary);
+        .chat-input-area {
+            padding: 32px;
             border-top: 1px solid var(--border-color);
         }
 
-        .input-wrapper {
+        .chat-input-wrapper {
             position: relative;
         }
 
-        #ideaInput {
+        #chatInput {
             width: 100%;
             padding: 18px 70px 18px 20px;
             background: var(--bg-tertiary);
@@ -656,27 +988,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             outline: none;
             min-height: 90px;
             max-height: 220px;
-            transition: all 0.3s;
-            font-weight: 400;
         }
 
-        #ideaInput:focus {
+        #chatInput:focus {
             border-color: var(--accent-primary);
-            background: var(--bg-secondary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
-        #ideaInput::placeholder {
-            color: var(--text-tertiary);
-        }
-
-        #generateBtn {
+        #sendBtn {
             position: absolute;
             right: 14px;
             bottom: 14px;
             width: 46px;
             height: 46px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             color: white;
             border: none;
             border-radius: 11px;
@@ -684,185 +1009,39 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s;
         }
 
-        #generateBtn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        .chat-preview {
+            width: 45%;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
         }
 
-        #generateBtn:disabled {
-            background: var(--bg-tertiary);
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        /* Preview Panel */
         .preview-header {
             padding: 20px 28px;
-            background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
             display: flex;
-            align-items: center;
             justify-content: space-between;
-        }
-
-        .preview-title {
-            font-size: 17px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .preview-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .preview-btn {
-            padding: 10px 18px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
             align-items: center;
-            gap: 6px;
-        }
-
-        .preview-btn:hover {
-            background: var(--bg-primary);
-            border-color: var(--accent-primary);
         }
 
         .preview-content {
             flex: 1;
-            overflow-y: auto;
+            overflow: auto;
             padding: 28px;
         }
 
-        .preview-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-tertiary);
-            text-align: center;
-            padding: 48px;
-        }
-
-        .placeholder-icon {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            border-radius: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-            margin-bottom: 24px;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
-        }
-
-        .placeholder-text {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 10px;
-            color: var(--text-primary);
-        }
-
-        .placeholder-hint {
-            font-size: 15px;
-            color: var(--text-secondary);
-        }
-
-        /* Welcome Screen */
-        .welcome {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            padding: 48px;
-            text-align: center;
-        }
-
-        .welcome-logo {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            border-radius: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 48px;
-            color: white;
-            margin-bottom: 28px;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
-        }
-
-        .welcome-title {
-            font-size: 32px;
-            font-weight: 800;
-            margin-bottom: 14px;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .welcome-subtitle {
-            font-size: 17px;
-            color: var(--text-secondary);
-            margin-bottom: 40px;
-            max-width: 480px;
-            line-height: 1.7;
-        }
-
-        .example-ideas {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 14px;
-            max-width: 600px;
+        .preview-frame {
             width: 100%;
-        }
-
-        .example-idea {
-            padding: 18px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
+            height: 100%;
+            border: none;
             border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            text-align: left;
+            background: white;
         }
 
-        .example-idea:hover {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .example-title {
-            font-weight: 600;
-            margin-bottom: 6px;
-            font-size: 14px;
-            color: var(--text-primary);
-        }
-
-        .example-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* File View */
         .file-list {
             display: flex;
             flex-direction: column;
@@ -881,36 +1060,103 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
             cursor: pointer;
         }
 
         .file-name {
             font-weight: 600;
             font-size: 14px;
-            color: var(--text-primary);
             font-family: 'Monaco', monospace;
-        }
-
-        .file-toggle {
-            color: var(--text-tertiary);
-            font-size: 18px;
         }
 
         .file-content {
             padding: 0;
             max-height: 400px;
             overflow: auto;
+            display: none;
+        }
+
+        .file-content.expanded {
+            display: block;
         }
 
         .file-content pre {
             margin: 0;
-            border-radius: 0;
-            border: none;
+            padding: 18px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
         }
 
-        /* Scrollbar */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 24px;
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 12px 24px;
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-primary);
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--success), #34d399);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
         ::-webkit-scrollbar {
             width: 10px;
             height: 10px;
@@ -931,311 +1177,490 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Chat Panel -->
-        <div class="chat-panel">
-            <div class="header">
-                <div class="logo">
-                    <div class="logo-icon">0</div>
-                    <div class="logo-text">Project-0</div>
-                </div>
-                <div class="status-badge">
-                    <div class="status-dot"></div>
-                    <span>AI Ready</span>
-                </div>
+    <!-- Landing Page -->
+    <div id="landingPage" class="page active landing">
+        <nav class="landing-nav">
+            <div class="logo-container">
+                <div class="logo">P</div>
+                <div class="logo-text">Project-0</div>
             </div>
-
-            <div class="messages" id="messages">
-                <div class="welcome">
-                    <div class="welcome-logo">0</div>
-                    <div class="welcome-title">Professional AI MVP Platform</div>
-                    <div class="welcome-subtitle">
-                        Generate production-ready full-stack applications with Node.js backend, database, and beautiful UI
-                    </div>
-                    <div class="example-ideas">
-                        <div class="example-idea" data-idea="Create a task management platform with user authentication, SQLite database, and real-time updates">
-                            <div class="example-title">📋 Task Manager</div>
-                            <div class="example-desc">Full CRUD with auth</div>
-                        </div>
-                        <div class="example-idea" data-idea="Build a blog platform with user accounts, post creation, comments, and categories using MongoDB">
-                            <div class="example-title">📝 Blog Platform</div>
-                            <div class="example-desc">Multi-user blogging</div>
-                        </div>
-                        <div class="example-idea" data-idea="Design an e-commerce product catalog with shopping cart, checkout, and order management">
-                            <div class="example-title">🛍️ E-commerce</div>
-                            <div class="example-desc">Shop with cart</div>
-                        </div>
-                        <div class="example-idea" data-idea="Create a real-time chat application with WebSocket support and message history">
-                            <div class="example-title">💬 Chat App</div>
-                            <div class="example-desc">Real-time messaging</div>
-                        </div>
-                    </div>
-                </div>
+            <div class="nav-actions">
+                <button onclick="showPage('authPage')">Try It Now</button>
             </div>
-
-            <div class="input-area">
-                <div class="input-wrapper">
-                    <textarea 
-                        id="ideaInput" 
-                        placeholder="Describe your MVP idea in detail... AI will generate complete backend + frontend + database!"
-                    ></textarea>
-                    <button id="generateBtn">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                        </svg>
-                    </button>
+        </nav>
+        <div class="landing-hero">
+            <h1 class="hero-title">Build MVPs in Minutes</h1>
+            <p class="hero-subtitle">
+                Transform your ideas into production-ready applications with intelligent code generation.
+                Full-stack, database-integrated, deployment-ready.
+            </p>
+            <button class="hero-cta" onclick="showPage('authPage')">Get Started</button>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-title">Lightning Fast</div>
+                    <div class="feature-desc">Generate complete MVPs in minutes, not days</div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Preview Panel -->
-        <div class="preview-panel">
-            <div class="preview-header">
-                <div class="preview-title">Project Files</div>
-                <div class="preview-actions">
-                    <button class="preview-btn" id="downloadBtn" style="display:none;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                        </svg>
-                        Download All
-                    </button>
+                <div class="feature-card">
+                    <div class="feature-icon">🏗️</div>
+                    <div class="feature-title">Full-Stack Ready</div>
+                    <div class="feature-desc">Backend, frontend, and database included</div>
                 </div>
-            </div>
-            <div class="preview-content" id="previewContent">
-                <div class="preview-placeholder">
-                    <div class="placeholder-icon">✨</div>
-                    <div class="placeholder-text">Ready to Build</div>
-                    <div class="placeholder-hint">Describe your idea to generate a complete MVP</div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <div class="feature-title">Beautiful UI</div>
+                    <div class="feature-desc">Modern, responsive designs that look professional</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-title">Production Ready</div>
+                    <div class="feature-desc">Security, error handling, and best practices built-in</div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Auth Page -->
+    <div id="authPage" class="page">
+        <div class="auth-container">
+            <div class="auth-box">
+                <div class="logo-container" style="justify-content: center; margin-bottom: 32px;">
+                    <div class="logo">P</div>
+                    <div class="logo-text">Project-0</div>
+                </div>
+                
+                <!-- Login Form -->
+                <div id="loginForm">
+                    <h2 class="auth-title">Welcome Back</h2>
+                    <form onsubmit="handleLogin(event)">
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" required id="loginEmail">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" required id="loginPassword">
+                        </div>
+                        <button type="submit" class="auth-button">Sign In</button>
+                    </form>
+                    <div class="auth-switch">
+                        Don't have an account? <a onclick="toggleAuth()">Sign up</a>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="registerForm" style="display:none;">
+                    <h2 class="auth-title">Create Account</h2>
+                    <form onsubmit="handleRegister(event)">
+                        <div class="form-group">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-input" required id="registerName">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" required id="registerEmail">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" required id="registerPassword">
+                        </div>
+                        <button type="submit" class="auth-button">Create Account</button>
+                    </form>
+                    <div class="auth-switch">
+                        Already have an account? <a onclick="toggleAuth()">Sign in</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboardPage" class="page dashboard">
+        <nav class="dashboard-nav">
+            <div class="logo-container">
+                <div class="logo">P</div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            <div class="user-info">
+                <span id="userName"></span>
+                <div class="user-avatar" id="userAvatar"></div>
+                <button class="btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </nav>
+        <div class="dashboard-content">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Your Projects</h1>
+                <button class="create-project-btn" onclick="showCreateModal()">
+                    <span>+</span> New Project
+                </button>
+            </div>
+            <div class="projects-grid" id="projectsGrid"></div>
+        </div>
+    </div>
+
+    <!-- Chat Page -->
+    <div id="chatPage" class="page">
+        <div class="chat-container">
+            <div class="chat-sidebar">
+                <div class="chat-sidebar-header">
+                    <button class="back-btn" onclick="showPage('dashboardPage'); loadProjects();">
+                        ← Back to Projects
+                    </button>
+                </div>
+            </div>
+            <div class="chat-main">
+                <div class="chat-header">
+                    <h2 id="chatProjectName"></h2>
+                    <button class="download-btn" id="downloadBtn" onclick="downloadProject()" style="display:none;">
+                        ↓ Download ZIP
+                    </button>
+                </div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-area">
+                    <div class="chat-input-wrapper">
+                        <textarea id="chatInput" placeholder="Describe what you want to build or modify..."></textarea>
+                        <button id="sendBtn" onclick="sendMessage()">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-preview">
+                <div class="preview-header">
+                    <h3>Live Preview</h3>
+                </div>
+                <div class="preview-content" id="previewContent">
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-tertiary);">
+                        <div style="font-size:48px;margin-bottom:16px;">✨</div>
+                        <div style="font-size:18px;font-weight:600;">Ready to Build</div>
+                        <div style="font-size:14px;margin-top:8px;">Your preview will appear here</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Create New Project</h2>
+            <form onsubmit="createProject(event)">
+                <div class="form-group">
+                    <label class="form-label">Project Name</label>
+                    <input type="text" class="form-input" required id="projectName">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / Requirements</label>
+                    <textarea class="form-input" required id="projectDesc" style="min-height:120px;resize:vertical;"></textarea>
+                </div>
+                <div style="display:flex;gap:12px;margin-top:24px;">
+                    <button type="submit" class="auth-button">Create Project</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
-        var isGenerating = false;
-        var currentMvpId = null;
-        var ideaInput = document.getElementById('ideaInput');
-        var generateBtn = document.getElementById('generateBtn');
-        var messagesDiv = document.getElementById('messages');
-        var previewContent = document.getElementById('previewContent');
-        var downloadBtn = document.getElementById('downloadBtn');
+        // Global state
+        let currentUser = null;
+        let currentToken = null;
+        let currentProject = null;
+        let projectFiles = {};
 
-        // Example ideas click handler
-        document.addEventListener('DOMContentLoaded', function() {
-            var exampleIdeas = document.querySelectorAll('.example-idea');
-            exampleIdeas.forEach(function(idea) {
-                idea.addEventListener('click', function() {
-                    var text = this.getAttribute('data-idea');
-                    ideaInput.value = text;
-                    ideaInput.focus();
-                });
-            });
-        });
-
-        // Auto-resize textarea
-        ideaInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 220) + 'px';
-        });
-
-        // Generate button click
-        generateBtn.addEventListener('click', generate);
-
-        // Enter to generate
-        ideaInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                generate();
+        // Load state from localStorage
+        function loadState() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            if (token && user) {
+                currentToken = token;
+                currentUser = JSON.parse(user);
+                showPage('dashboardPage');
+                loadProjects();
             }
-        });
+        }
 
-        function generate() {
-            var idea = ideaInput.value.trim();
-            if (!idea || isGenerating) return;
+        // Page navigation
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            
+            if (pageId === 'dashboardPage' && currentUser) {
+                document.getElementById('userName').textContent = currentUser.name;
+                document.getElementById('userAvatar').textContent = currentUser.name[0].toUpperCase();
+            }
+        }
 
-            isGenerating = true;
-            generateBtn.disabled = true;
+        // Auth functions
+        function toggleAuth() {
+            const login = document.getElementById('loginForm');
+            const register = document.getElementById('registerForm');
+            if (login.style.display === 'none') {
+                login.style.display = 'block';
+                register.style.display = 'none';
+            } else {
+                login.style.display = 'none';
+                register.style.display = 'block';
+            }
+        }
 
-            // Remove welcome
-            var welcome = document.querySelector('.welcome');
-            if (welcome) welcome.remove();
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    currentToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    showPage('dashboardPage');
+                    loadProjects();
+                } else {
+                    alert('Invalid credentials');
+                }
+            } catch (error) {
+                alert('Login failed: ' + error.message);
+            }
+        }
 
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, email, password})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    currentToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    showPage('dashboardPage');
+                    loadProjects();
+                } else {
+                    alert('Registration failed');
+                }
+            } catch (error) {
+                alert('Registration failed: ' + error.message);
+            }
+        }
+
+        function logout() {
+            currentToken = null;
+            currentUser = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            showPage('landingPage');
+        }
+
+        // Projects
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects?token=' + currentToken);
+                const data = await response.json();
+                
+                const grid = document.getElementById('projectsGrid');
+                grid.innerHTML = data.projects.map(p => `
+                    <div class="project-card" onclick="openProject(${p.id}, '${p.name}')">
+                        <div class="project-name">${p.name}</div>
+                        <div class="project-desc">${p.description}</div>
+                        <div class="project-date">Created ${new Date(p.created_at).toLocaleDateString()}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+            }
+        }
+
+        function showCreateModal() {
+            document.getElementById('createModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('createModal').classList.remove('active');
+        }
+
+        async function createProject(e) {
+            e.preventDefault();
+            const name = document.getElementById('projectName').value;
+            const description = document.getElementById('projectDesc').value;
+            
+            try {
+                const response = await fetch('/api/projects?token=' + currentToken, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, description})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    closeModal();
+                    openProject(data.project_id, name);
+                }
+            } catch (error) {
+                alert('Failed to create project: ' + error.message);
+            }
+        }
+
+        async function openProject(projectId, projectName) {
+            currentProject = projectId;
+            document.getElementById('chatProjectName').textContent = projectName;
+            showPage('chatPage');
+            
+            // Load project details
+            try {
+                const response = await fetch('/api/project/' + projectId + '?token=' + currentToken);
+                const data = await response.json();
+                projectFiles = data.files || {};
+                
+                if (Object.keys(projectFiles).length > 0) {
+                    showFiles(projectFiles);
+                    document.getElementById('downloadBtn').style.display = 'flex';
+                }
+            } catch (error) {
+                console.error('Failed to load project:', error);
+            }
+        }
+
+        // Chat
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
             // Add user message
-            addMessage('user', idea);
-
-            // Clear input
-            ideaInput.value = '';
-            ideaInput.style.height = 'auto';
-
-            // Create AI message container
-            var aiDiv = document.createElement('div');
+            addMessage('user', message);
+            input.value = '';
+            
+            // Add AI message container
+            const messagesDiv = document.getElementById('chatMessages');
+            const aiDiv = document.createElement('div');
             aiDiv.className = 'message ai-message';
-            aiDiv.innerHTML = 
-                '<div class="message-header"><span class="message-role ai-role">Project-0</span></div>' +
-                '<div class="status-indicator" id="statusIndicator">Initializing...</div>' +
-                '<div class="message-content markdown-content" id="currentResponse"></div>';
+            aiDiv.innerHTML = '<div class="message-header"><span class="message-role ai-role">Project-0 AI</span></div><div class="message-content" id="currentResponse"></div>';
             messagesDiv.appendChild(aiDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-            // Fetch generation
-            fetch('/api/generate', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({idea: idea})
-            })
-            .then(function(response) {
-                var reader = response.body.getReader();
-                var decoder = new TextDecoder();
-                var fullResponse = '';
-
-                function readStream() {
-                    reader.read().then(function(result) {
-                        if (result.done) {
-                            isGenerating = false;
-                            generateBtn.disabled = false;
-                            ideaInput.focus();
-                            return;
-                        }
-
-                        var chunk = decoder.decode(result.value);
-                        var lines = chunk.split('\\n');
-
-                        for (var i = 0; i < lines.length; i++) {
-                            var line = lines[i];
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    var data = JSON.parse(line.slice(6));
-
-                                    if (data.type === 'status') {
-                                        var statusDiv = document.getElementById('statusIndicator');
-                                        if (statusDiv) statusDiv.textContent = data.content;
-                                    } 
-                                    else if (data.type === 'content') {
-                                        var statusDiv = document.getElementById('statusIndicator');
-                                        if (statusDiv) statusDiv.remove();
-
-                                        fullResponse += data.content;
-                                        var responseDiv = document.getElementById('currentResponse');
-                                        if (responseDiv) {
-                                            responseDiv.innerHTML = marked.parse(fullResponse);
-                                        }
-                                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                                    } 
-                                    else if (data.type === 'done') {
-                                        currentMvpId = data.mvp_id;
-                                        if (data.file_count > 0) {
-                                            showFiles(data.mvp_id);
-                                            downloadBtn.style.display = 'flex';
-                                        }
-                                    } 
-                                    else if (data.type === 'error') {
-                                        var responseDiv = document.getElementById('currentResponse');
-                                        responseDiv.innerHTML = '<span style="color: var(--error);">' + data.content + '</span>';
-                                    }
-                                } catch (e) {
-                                    console.error('Parse error:', e);
-                                }
+            
+            try {
+                const response = await fetch('/api/chat?token=' + currentToken, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({project_id: currentProject, message: message})
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'content') {
+                                fullResponse += data.content;
+                                document.getElementById('currentResponse').innerHTML = marked.parse(fullResponse);
+                                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                            } else if (data.type === 'done') {
+                                projectFiles = data.files;
+                                showFiles(data.files);
+                                document.getElementById('downloadBtn').style.display = 'flex';
                             }
                         }
-
-                        readStream();
-                    });
+                    }
                 }
-
-                readStream();
-            })
-            .catch(function(error) {
-                console.error('Error:', error);
-                isGenerating = false;
-                generateBtn.disabled = false;
-            });
-        }
-
-        function showFiles(mvpId) {
-            fetch('/api/mvp/' + mvpId)
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                var files = data.files;
-                var html = '<div class="file-list">';
-                
-                for (var filename in files) {
-                    var content = files[filename];
-                    html += '<div class="file-item">' +
-                        '<div class="file-header" onclick="toggleFile(this)">' +
-                            '<span class="file-name">' + filename + '</span>' +
-                            '<span class="file-toggle">▼</span>' +
-                        '</div>' +
-                        '<div class="file-content" style="display:none;">' +
-                            '<pre><code>' + escapeHtml(content) + '</code></pre>' +
-                        '</div>' +
-                    '</div>';
-                }
-                
-                html += '</div>';
-                previewContent.innerHTML = html;
-            });
-        }
-
-        function toggleFile(header) {
-            var content = header.nextElementSibling;
-            var toggle = header.querySelector('.file-toggle');
-            
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                toggle.textContent = '▲';
-            } else {
-                content.style.display = 'none';
-                toggle.textContent = '▼';
+            } catch (error) {
+                console.error('Chat error:', error);
             }
         }
 
         function addMessage(role, content) {
-            var messageDiv = document.createElement('div');
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + role + '-message';
-            
-            var roleLabel = role === 'user' ? 'You' : 'Project-0';
-            var roleClass = role === 'user' ? 'user-role' : 'ai-role';
-            
-            messageDiv.innerHTML = 
-                '<div class="message-header"><span class="message-role ' + roleClass + '">' + roleLabel + '</span></div>' +
-                '<div class="message-content">' + escapeHtml(content) + '</div>';
-            
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="message-role ${role}-role">${role === 'user' ? 'You' : 'Project-0 AI'}</span>
+                </div>
+                <div class="message-content">${escapeHtml(content)}</div>
+            `;
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
+        function showFiles(files) {
+            const preview = document.getElementById('previewContent');
+            
+            // Check if there's an index.html to show
+            if (files['frontend/index.html']) {
+                const iframe = document.createElement('iframe');
+                iframe.className = 'preview-frame';
+                iframe.srcdoc = files['frontend/index.html'];
+                preview.innerHTML = '';
+                preview.appendChild(iframe);
+            } else {
+                // Show file list
+                let html = '<div class="file-list">';
+                for (const [filename, content] of Object.entries(files)) {
+                    html += `
+                        <div class="file-item">
+                            <div class="file-header" onclick="toggleFile(this)">
+                                <span class="file-name">${filename}</span>
+                                <span>▼</span>
+                            </div>
+                            <div class="file-content">
+                                <pre><code>${escapeHtml(content)}</code></pre>
+                            </div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                preview.innerHTML = html;
+            }
+        }
+
+        function toggleFile(header) {
+            const content = header.nextElementSibling;
+            content.classList.toggle('expanded');
+            header.querySelector('span:last-child').textContent = content.classList.contains('expanded') ? '▲' : '▼';
+        }
+
+        async function downloadProject() {
+            window.location.href = '/api/download/' + currentProject + '?token=' + currentToken;
+        }
+
         function escapeHtml(text) {
-            var div = document.createElement('div');
+            const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // Download all files
-        downloadBtn.addEventListener('click', function() {
-            if (currentMvpId) {
-                fetch('/api/mvp/' + currentMvpId)
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
-                    // Create a simple text file with all code
-                    var content = '# Project Files\\n\\n';
-                    for (var filename in data.files) {
-                        content += '## ' + filename + '\\n```\\n' + data.files[filename] + '\\n```\\n\\n';
-                    }
-                    
-                    var blob = new Blob([content], {type: 'text/plain'});
-                    var url = URL.createObjectURL(blob);
-                    var a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'project-files.txt';
-                    a.click();
-                });
-            }
-        });
-
-        // Focus input on load
-        window.addEventListener('load', function() {
-            ideaInput.focus();
-        });
+        // Initialize
+        loadState();
     </script>
 </body>
 </html>"""
@@ -1245,13 +1670,15 @@ if __name__ == "__main__":
     print("""
     ╔═══════════════════════════════════════════════════════╗
     ║                                                       ║
-    ║      🚀 PROJECT-0 PROFESSIONAL MVP PLATFORM 🚀       ║
+    ║      🚀 PROJECT-0 PROFESSIONAL PLATFORM 🚀           ║
     ║                                                       ║
-    ║   Generate Real MVPs with:                           ║
-    ║   • Node.js + Express Backend                        ║
-    ║   • SQLite/MongoDB Database                          ║
-    ║   • Modern UI with Official Colors                   ║
-    ║   • Production-Ready Code                            ║
+    ║   Complete Full-Stack MVP Generator                  ║
+    ║   • Landing Page                                     ║
+    ║   • Authentication (Register/Login)                  ║
+    ║   • Dashboard with Projects                          ║
+    ║   • AI Chat with Context                             ║
+    ║   • Live Preview                                     ║
+    ║   • ZIP Download                                     ║
     ║                                                       ║
     ║   Open: http://localhost:8000                        ║
     ║                                                       ║

@@ -1,391 +1,443 @@
 # 🚀 Project-0 - Professional AI MVP Platform
 
-> **Generate REAL production-ready MVPs with Node.js, Database & Beautiful UI**
+> **The Complete Full-Stack MVP Generator with Authentication & Project Management**
 
-## ✨ Что это?
+## ✨ What's New - Full Platform!
 
-**Project-0** - это профессиональная AI-платформа на базе **Ollama GLM-4.6:cloud**, которая генерирует **РЕАЛЬНЫЕ, РАБОТАЮЩИЕ MVP** с полным бэкендом, базой данных и современным UI.
+**Project-0** is now a complete professional platform with:
 
-### Ключевые возможности:
+- 🎨 **Beautiful Landing Page** with logo
+- 🔐 **User Authentication** (Register & Login)
+- 📊 **Project Dashboard** with project list
+- 🤖 **AI Chat** with project context memory
+- 👁️ **Live Preview** without running servers
+- 📦 **ZIP Download** with auto-run scripts
+- 🇬🇧 **English Interface**
 
-- 🎯 **Node.js Backend** - Express.js сервер с роутингом и middleware
-- 💾 **База данных** - SQLite или MongoDB с моделями
-- 🎨 **Профессиональный UI** - с официальными цветовыми схемами
-- ⚛️ **Modern Frontend** - HTML5 + Tailwind CSS + JavaScript/React
-- 📝 **Множество файлов** - полная структура проекта
-- 🔐 **Production-ready** - с error handling, validation, security
-- 📖 **Markdown документация** - красиво оформленная
-- 🎨 **4 цветовые темы** - Professional Blue, Success Green, Modern Purple, Warm Orange
+## 🎯 What It Does
 
-## 🚀 Быстрый старт
+### Landing Page
+- Beautiful hero section
+- Feature showcase
+- Professional design
+- "Try It Now" CTA
+
+### Authentication
+- **Register**: Name, Email, Password (encrypted SHA-256)
+- **Login**: Email, Password
+- Secure session management
+- Persistent login (localStorage)
+
+### Dashboard
+- View all your projects
+- Create new projects
+- Click to open/edit projects
+- Project metadata (created date, description)
+
+### AI Chat Interface
+- **Split-screen**: Chat (55%) + Preview (45%)
+- **Project Context**: AI remembers previous conversations
+- **Live Preview**: See results instantly in iframe
+- **File Viewer**: Collapsible file list
+- **Download**: Get complete project as ZIP
+
+### AI Capabilities
+- **Context Memory**: Remembers project requirements
+- **Incremental Updates**: Modify existing code
+- **Full-Stack Generation**: Backend + Frontend + DB
+- **Production-Ready**: Complete, working code
+
+## 🚀 Quick Start
 
 ```bash
-# Запустите платформу
+# Run the platform
 python project0.py
 
-# Откройте браузер
+# Open browser
 http://localhost:8000
 ```
 
-## 🎨 Официальные цветовые схемы
+## 📖 User Flow
 
-### 1. Professional Blue (по умолчанию)
-```css
-Primary: #2563eb    /* blue-600 */
-Secondary: #3b82f6  /* blue-500 */
-Accent: #60a5fa     /* blue-400 */
-Dark: #1e40af       /* blue-800 */
+### 1. Landing Page
+```
+Landing → "Try It Now" → Auth
 ```
 
-### 2. Success Green
-```css
-Primary: #10b981    /* emerald-500 */
-Secondary: #34d399  /* emerald-400 */
-Accent: #6ee7b7     /* emerald-300 */
-Dark: #059669       /* emerald-600 */
+### 2. Sign Up
+```
+Name: John Doe
+Email: john@example.com
+Password: ******
+→ Creates account → Auto login → Dashboard
 ```
 
-### 3. Modern Purple
-```css
-Primary: #8b5cf6    /* violet-500 */
-Secondary: #a78bfa  /* violet-400 */
-Accent: #c4b5fd     /* violet-300 */
-Dark: #7c3aed       /* violet-600 */
+### 3. Dashboard
+```
+Projects List (empty at first)
+→ Click "New Project"
 ```
 
-### 4. Warm Orange
-```css
-Primary: #f59e0b    /* amber-500 */
-Secondary: #fbbf24  /* amber-400 */
-Accent: #fcd34d     /* amber-300 */
-Dark: #d97706       /* amber-600 */
+### 4. Create Project
+```
+Project Name: Task Manager
+Description: Build a task management app with user auth, 
+SQLite database, and modern UI
+
+→ Click "Create Project" → Opens Chat
 ```
 
-## 💡 Что генерирует AI?
+### 5. Chat with AI
+```
+AI: "What would you like to build?"
 
-### Backend (Node.js + Express):
-```
-backend/
-├── package.json          # Dependencies (express, cors, sqlite3, etc.)
-├── server.js            # Main Express server
-├── database.js          # Database connection & models
-├── .env.example         # Environment variables template
-└── routes/              # API endpoints
-```
+You: "Create a complete task manager with:
+- User authentication
+- SQLite database
+- CRUD operations for tasks
+- Beautiful UI with Tailwind CSS
+- Responsive design"
 
-### Frontend:
-```
-frontend/
-├── index.html           # Main HTML with Tailwind CSS
-├── app.js              # Frontend logic & API calls
-└── styles.css          # Additional custom styles (if needed)
+AI: *Generates complete project*
+→ Shows files in preview
+→ Live preview in iframe (if HTML available)
 ```
 
-### Documentation:
+### 6. Edit/Modify
 ```
-README.md               # Complete setup & deployment guide
-```
+You: "Add a dark mode toggle to the UI"
 
-## 🏗️ Архитектура MVP
-
-**AI генерирует полный стек:**
-
-1. **Backend:**
-   - Express.js сервер на порту 3000
-   - CORS middleware
-   - Body parser
-   - Error handling
-   - Database connection (SQLite/MongoDB)
-   - RESTful API endpoints
-   - Data validation
-   - Security best practices
-
-2. **Database:**
-   - Schema/Models определения
-   - Миграции (если нужны)
-   - Seed data (примеры)
-   - CRUD операции
-   - Индексы и оптимизация
-
-3. **Frontend:**
-   - Semantic HTML5
-   - Tailwind CSS styling
-   - Responsive design
-   - JavaScript/React компоненты
-   - API integration
-   - Form validation
-   - Error handling
-   - Loading states
-
-## 📖 Примеры использования
-
-### Пример 1: Task Manager MVP
-
-**Запрос:**
-```
-Create a task management platform with user authentication, 
-SQLite database, and real-time updates
+AI: *Remembers project context*
+     *Updates existing files*
+     *Maintains code consistency*
 ```
 
-**AI создаёт:**
+### 7. Download
 ```
-✓ backend/server.js - Express server with auth
-✓ backend/database.js - SQLite models (Users, Tasks)
-✓ backend/package.json - All dependencies
-✓ frontend/index.html - Beautiful UI with task list
-✓ frontend/app.js - CRUD operations
-✓ README.md - Setup instructions
-```
-
-### Пример 2: Blog Platform
-
-**Запрос:**
-```
-Build a blog platform with user accounts, post creation, 
-comments, and categories using MongoDB
+Click "Download ZIP"
+→ Gets project-name.zip
+→ Contains:
+   backend/
+   ├── server.js
+   ├── package.json
+   ├── database.js
+   └── .env.example
+   frontend/
+   └── index.html
+   start.sh   ← Run this!
+   start.bat  ← Windows version
 ```
 
-**AI создаёт:**
-```
-✓ backend/server.js - Express + MongoDB
-✓ backend/models/ - User, Post, Comment models
-✓ backend/routes/ - API endpoints
-✓ frontend/index.html - Blog UI with editor
-✓ README.md - Deployment guide
-```
-
-## 🎨 UI Стиль
-
-### Современный профессиональный дизайн:
-
-- **Шрифт:** Inter (Google Fonts)
-- **Layout:** Split-screen (50/50)
-- **Цвета:** CSS Variables для тем
-- **Анимации:** Smooth transitions, cubic-bezier
-- **Компоненты:**
-  - Gradient buttons with shadows
-  - Hover effects with transform
-  - Professional spacing (Tailwind-like)
-  - Beautiful typography
-  - Card-based layouts
-  - Responsive grid systems
-
-### Темная тема:
-```css
---bg-primary: #000000
---bg-secondary: #0a0a0a
---bg-tertiary: #1a1a1a
---border-color: #2a2a2a
---text-primary: #ffffff
---text-secondary: #a0a0a0
-```
-
-## 📦 Структура файла
-
-**`project0.py`** (1265 строк, 44 KB)
-
-Включает:
-- Enhanced System Prompt для реальных MVP
-- Node.js + Express генерация
-- Database integration (SQLite/MongoDB)
-- Multiple file extraction
-- Professional UI с 4 цветовыми темами
-- Enhanced markdown rendering
-- File viewer в preview панели
-- Download функция для всех файлов
-
-## 🛠️ Требования
-
-1. **Python 3.8+**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Ollama с GLM-4.6**
-   ```bash
-   ollama serve
-   ollama pull glm-4.6:cloud
-   ```
-
-## 🎯 Workflow
-
-1. **Опишите идею MVP** (можно неполную):
-   ```
-   "Создай платформу для управления задачами с аутентификацией"
-   ```
-
-2. **AI анализирует и дополняет:**
-   - Определяет нужные технологии
-   - Выбирает БД (SQLite/MongoDB)
-   - Планирует архитектуру
-   - Выбирает цветовую схему
-
-3. **Генерирует полный стек:**
-   - Backend: Node.js + Express
-   - Database: Models + Connection
-   - Frontend: HTML + Tailwind + JS
-   - Documentation: README
-
-4. **Показывает файлы:**
-   - Все файлы в preview панели
-   - Можно развернуть/свернуть
-   - Синтаксис подсветка
-   - Кнопка Download All
-
-## 💻 API Endpoints
-
-### POST `/api/generate`
-Генерация MVP
-
-**Request:**
-```json
-{
-  "idea": "Create a task manager with auth..."
-}
-```
-
-**Response:** Server-Sent Events
-```
-data: {"type": "status", "content": "🧠 Analyzing..."}
-data: {"type": "status", "content": "🏗️ Designing architecture..."}
-data: {"type": "status", "content": "⚡ Generating backend..."}
-data: {"type": "content", "content": "## 📋 Project Overview..."}
-data: {"type": "done", "mvp_id": "123", "file_count": 6}
-```
-
-### GET `/api/mvp/{mvp_id}`
-Получить все файлы MVP
-
-**Response:**
-```json
-{
-  "files": {
-    "backend/server.js": "...",
-    "backend/package.json": "...",
-    "frontend/index.html": "..."
-  },
-  "markdown": "...",
-  "idea": "...",
-  "timestamp": "..."
-}
-```
-
-## 🎨 Интерфейс
-
-```
-┌─────────────────────────┬─────────────────────────┐
-│   CHAT PANEL (50%)      │   FILES PANEL (50%)     │
-│                         │                         │
-│  Project-0 Logo         │  Project Files Header   │
-│  [AI Ready Badge]       │  [Download All Button]  │
-├─────────────────────────┼─────────────────────────┤
-│                         │                         │
-│  Welcome Screen:        │  Placeholder:           │
-│  • Professional logo    │  "Ready to Build"       │
-│  • Modern title         │                         │
-│  • 4 example ideas      │  ↓ After generation:    │
-│                         │                         │
-│  Chat Messages:         │  File List:             │
-│  • User requests        │  • backend/server.js    │
-│  • AI responses         │  • backend/package.json │
-│  • Enhanced markdown    │  • frontend/index.html  │
-│  • Status indicators    │  • README.md            │
-│                         │  (collapsible)          │
-├─────────────────────────┤                         │
-│  Enhanced Textarea      │                         │
-│  [⚡ Generate Button]   │                         │
-└─────────────────────────┴─────────────────────────┘
-```
-
-## 🌟 Улучшения UI
-
-### Что нового:
-
-1. **Professional Design:**
-   - Inter font (Google Fonts)
-   - CSS Variables для тем
-   - Smooth animations
-   - Gradient buttons
-   - Box shadows
-
-2. **Enhanced Markdown:**
-   - Better typography
-   - Code blocks с подсветкой
-   - Headers с borders
-   - Blockquotes
-   - Lists
-
-3. **File Viewer:**
-   - Collapsible file items
-   - Syntax highlighting
-   - Copy buttons (TODO)
-   - Download all function
-
-4. **Color Themes:**
-   - 4 официальные схемы
-   - CSS variables
-   - Easy customization
-
-## 🚀 Production Deployment
-
-### Setup Script:
+### 8. Deploy
 ```bash
-# 1. Install Node.js dependencies
+unzip project-name.zip
+cd project-name
+chmod +x start.sh
+./start.sh
+
+# Or manually:
 cd backend
 npm install
-
-# 2. Setup environment
-cp .env.example .env
-nano .env  # Edit variables
-
-# 3. Initialize database
-node database.js
-
-# 4. Start server
 npm start
 ```
 
-### Docker:
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY backend/ ./
-RUN npm install
-EXPOSE 3000
-CMD ["node", "server.js"]
+## 🎨 Features Detail
+
+### Landing Page
+- Hero section with gradient title
+- 4 feature cards:
+  - ⚡ Lightning Fast
+  - 🏗️ Full-Stack Ready
+  - 🎨 Beautiful UI
+  - 🔐 Production Ready
+
+### Authentication System
+- **Secure**: SHA-256 password hashing
+- **SQLite Database**: Users, Projects, Sessions tables
+- **Session Management**: Token-based auth
+- **Persistent**: localStorage for auto-login
+
+### Dashboard
+- **Project Cards**: Grid layout, hover effects
+- **Create Button**: Modal form for new projects
+- **User Info**: Avatar, name, logout button
+- **Responsive**: Works on all devices
+
+### Chat Interface
+```
+┌─────────────────────────┬──────────────────────┐
+│ SIDEBAR │  CHAT (55%)    │   PREVIEW (45%)      │
+├─────────┼────────────────┼──────────────────────┤
+│         │                │                      │
+│ Back to │  Messages      │  Live Preview        │
+│ Project │  • User        │  (iframe or files)   │
+│         │  • AI          │                      │
+│         │                │  [Download ZIP]      │
+│         │  Input Area    │                      │
+│         │  [Send ⚡]     │                      │
+└─────────┴────────────────┴──────────────────────┘
 ```
 
-## 📝 Что генерируется
+### AI Context Memory
+```python
+# AI remembers:
+- Project description
+- Previous requests
+- Generated files
+- User modifications
 
-Для каждого MVP AI создаёт:
+# Example conversation:
+User: "Create a blog platform"
+AI: *generates complete MVP*
 
-- ✅ `backend/package.json` - полный с зависимостями
-- ✅ `backend/server.js` - Express server
-- ✅ `backend/database.js` - DB connection & models
-- ✅ `backend/.env.example` - environment template
-- ✅ `frontend/index.html` - полный UI
-- ✅ `frontend/app.js` - логика (опционально)
-- ✅ `README.md` - setup instructions
+User: "Add categories to posts"
+AI: *remembers blog context*
+     *updates existing code*
+     *adds category feature*
+```
 
-## 🎯 Roadmap
+### Live Preview
+- **iframe**: Shows `frontend/index.html` live
+- **No Server**: Runs directly in browser
+- **Interactive**: Full functionality preview
+- **File List**: If no HTML, shows collapsible files
 
-- [x] Node.js backend generation
-- [x] Database integration
-- [x] Professional UI
-- [x] Color schemes
-- [x] Enhanced markdown
-- [x] Multiple files
-- [ ] Copy to clipboard для кода
-- [ ] Project templates
-- [ ] Deploy integration
-- [ ] ZIP download
+### ZIP Download
+```
+project-name.zip
+├── backend/
+│   ├── server.js
+│   ├── package.json
+│   ├── database.js
+│   └── .env.example
+├── frontend/
+│   └── index.html
+├── README.md
+├── start.sh      ← chmod +x && ./start.sh
+└── start.bat     ← Windows: double-click
+```
 
-## 📄 Лицензия
+## 💻 Technical Stack
 
-MIT License
+### Platform Backend (Python)
+- **FastAPI**: Web framework
+- **SQLite**: Database (project0.db)
+- **Ollama**: AI inference
+- **Sessions**: Token-based auth
+
+### Generated Backend (Node.js)
+- **Express**: Web framework
+- **SQLite/MongoDB**: Database
+- **CORS**: Cross-origin support
+- **dotenv**: Environment variables
+
+### Generated Frontend
+- **HTML5**: Semantic markup
+- **Tailwind CSS**: Utility-first styling
+- **JavaScript**: Vanilla or React
+- **Responsive**: Mobile-first design
+
+## 🗄️ Database Schema
+
+### Users Table
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP
+);
+```
+
+### Projects Table
+```sql
+CREATE TABLE projects (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    context TEXT,          -- Conversation history
+    files TEXT,            -- JSON of generated files
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### Sessions Table
+```sql
+CREATE TABLE sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER,
+    created_at TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+## 🔐 Security
+
+- ✅ Password hashing (SHA-256)
+- ✅ SQL injection protection (parameterized queries)
+- ✅ Session tokens (32-byte secure random)
+- ✅ CORS configured
+- ✅ Input validation
+- ✅ XSS prevention (escapeHtml)
+
+## 🎨 UI/UX
+
+### Design System
+- **Font**: Inter (Google Fonts)
+- **Colors**: 
+  - Primary: #2563eb (blue)
+  - Success: #10b981 (green)
+  - Error: #ef4444 (red)
+- **Spacing**: 8px base grid
+- **Radius**: 8-20px rounded corners
+- **Shadows**: Layered, colored shadows
+- **Animations**: Cubic-bezier, smooth
+
+### Responsive
+- Mobile: 320px+
+- Tablet: 768px+
+- Desktop: 1024px+
+
+## 📝 API Endpoints
+
+### Authentication
+```
+POST /api/register
+POST /api/login
+```
+
+### Projects
+```
+GET  /api/projects?token=xxx
+POST /api/projects?token=xxx
+GET  /api/project/:id?token=xxx
+```
+
+### Chat
+```
+POST /api/chat?token=xxx
+```
+
+### Download
+```
+GET /api/download/:id?token=xxx
+```
+
+## 🔧 Configuration
+
+File: `project0.py`
+
+```python
+OLLAMA_API_URL = "http://localhost:11434/api/chat"
+MODEL_NAME = "glm-4.6:cloud"
+DB_FILE = "project0.db"
+```
+
+## 🚀 Deployment
+
+### Development
+```bash
+python project0.py
+```
+
+### Production
+```bash
+# With Gunicorn
+pip install gunicorn
+gunicorn project0:app -w 4 -k uvicorn.workers.UvicornWorker
+
+# With Docker
+docker build -t project0 .
+docker run -p 8000:8000 project0
+```
+
+## 📊 File Size
+
+```
+project0.py: 1692 lines, 56 KB
+Everything in ONE file! ✅
+```
+
+## ✨ What's Included
+
+- ✅ Landing page with hero
+- ✅ Authentication system
+- ✅ User dashboard
+- ✅ Project management
+- ✅ AI chat with context
+- ✅ Live preview
+- ✅ File viewer
+- ✅ ZIP download
+- ✅ Auto-run scripts
+- ✅ Responsive design
+- ✅ Dark theme
+- ✅ Professional UI
+- ✅ Security built-in
+- ✅ All in English
+
+## 🎯 Example Projects
+
+### Task Manager
+```
+Name: Task Manager Pro
+Description: Build a task management app with user authentication, 
+SQLite database, categories, due dates, and dark mode
+
+AI Generates:
+→ Express backend with JWT auth
+→ SQLite database (users, tasks, categories)
+→ CRUD API endpoints
+→ Beautiful Tailwind UI
+→ Dark mode toggle
+→ Responsive design
+```
+
+### Blog Platform
+```
+Name: My Blog
+Description: Create a blog platform with posts, comments, 
+categories, and rich text editor
+
+AI Generates:
+→ Node.js + Express backend
+→ MongoDB database
+→ Post/Comment models
+→ Rich text editor
+→ Category system
+→ Modern UI
+```
+
+## 🎉 Ready to Use!
+
+```bash
+# 1. Start platform
+python project0.py
+
+# 2. Open browser
+http://localhost:8000
+
+# 3. Sign up / Login
+
+# 4. Create project
+
+# 5. Chat with AI
+
+# 6. Download ZIP
+
+# 7. Run project
+./start.sh
+```
+
+## 📄 License
+
+MIT License - Build amazing things!
 
 ---
 
-**Made with ❤️ for professional developers**
+**Made with ❤️ for rapid MVP development**
 
-От идеи до production-ready MVP за минуты! 🚀
+Transform ideas into production-ready applications! 🚀
