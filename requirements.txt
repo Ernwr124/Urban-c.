@@ -3,7 +3,4 @@ uvicorn
 httpx
 pydantic
 python-multipart
-passlib[bcrypt]
 python-jose[cryptography]
-sqlalchemy
-aiosqlite
