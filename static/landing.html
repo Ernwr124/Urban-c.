@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project-0 - Professional AI MVP Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .landing {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .landing-nav {
+            padding: 20px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .nav-btn {
+            padding: 11px 26px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 9px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .landing-hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 100px 48px;
+            text-align: center;
+            background: radial-gradient(ellipse at top, rgba(0, 102, 255, 0.1) 0%, transparent 50%);
+        }
+
+        .hero-title {
+            font-size: 68px;
+            font-weight: 900;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+            color: var(--text-secondary);
+            margin-bottom: 44px;
+            max-width: 680px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+
+        .hero-cta {
+            padding: 16px 44px;
+            background: var(--gradient-blue);
+            color: white;
+            border: none;
+            border-radius: 11px;
+            font-weight: 700;
+            font-size: 17px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-accent);
+        }
+
+        .hero-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 28px;
+            max-width: 1100px;
+            margin-top: 80px;
+        }
+
+        .feature-card {
+            padding: 30px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-icon {
+            font-size: 44px;
+            margin-bottom: 14px;
+        }
+
+        .feature-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .feature-desc {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="landing">
+        <nav class="landing-nav">
+            <div class="logo-container">
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 7C4 5.34315 5.34315 4 7 4H12L17 9V17C17 18.6569 15.6569 20 14 20H7C5.34315 20 4 18.6569 4 17V7Z" fill="white"/>
+                        <path d="M17 9L12 4V7C12 8.10457 12.8954 9 14 9H17Z" fill="white" fill-opacity="0.7"/>
+                    </svg>
+                </div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            <div class="nav-actions">
+                <button class="nav-btn" onclick="scrollToFeatures()">Learn More</button>
+                <button class="btn-primary" onclick="window.location.href='/auth'">Try It Now</button>
+            </div>
+        </nav>
+
+        <div class="landing-hero">
+            <h1 class="hero-title">Build MVPs in Minutes</h1>
+            <p class="hero-subtitle">
+                Transform your ideas into production-ready applications with intelligent code generation.
+                Full-stack, database-integrated, deployment-ready.
+            </p>
+            <button class="hero-cta" onclick="window.location.href='/auth'">Get Started</button>
+            
+            <div class="features" id="featuresSection">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-title">Lightning Fast</div>
+                    <div class="feature-desc">Generate complete MVPs in minutes with advanced AI</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏗️</div>
+                    <div class="feature-title">Full-Stack Ready</div>
+                    <div class="feature-desc">Backend, frontend, and database automatically configured</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <div class="feature-title">Beautiful UI</div>
+                    <div class="feature-desc">Modern, responsive designs with professional styling</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-title">Production Ready</div>
+                    <div class="feature-desc">Security, error handling, and best practices included</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function scrollToFeatures() {
+            document.getElementById('featuresSection').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+            });
+        }
+    </script>
+</body>
+</html>
