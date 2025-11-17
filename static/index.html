@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project-0 - Powerful AI Coding Platform</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">0</div>
+                <div class="logo-text">Project-0</div>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>GLM-4.6 Ready</span>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="welcome">
+                    <div class="welcome-logo">0</div>
+                    <div class="welcome-title">Welcome to Project-0</div>
+                    <div class="welcome-subtitle">
+                        The most powerful AI coding platform. Create anything from a simple script to a full-stack application. 
+                        Just describe what you want to build.
+                    </div>
+                    <div class="example-prompts">
+                        <div class="example-prompt" data-prompt="Create a full-stack todo app with React and Node.js">
+                            <div class="example-prompt-title">🚀 Full-Stack App</div>
+                            <div class="example-prompt-text">Create a complete application</div>
+                        </div>
+                        <div class="example-prompt" data-prompt="Build a REST API with authentication and database">
+                            <div class="example-prompt-title">🔧 REST API</div>
+                            <div class="example-prompt-text">Backend with auth & DB</div>
+                        </div>
+                        <div class="example-prompt" data-prompt="Design a modern landing page with animations">
+                            <div class="example-prompt-title">🎨 UI Design</div>
+                            <div class="example-prompt-text">Beautiful frontend page</div>
+                        </div>
+                        <div class="example-prompt" data-prompt="Create a Python script for data analysis with pandas">
+                            <div class="example-prompt-title">📊 Data Script</div>
+                            <div class="example-prompt-text">Analysis & visualization</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="messageInput" 
+                            placeholder="Describe what you want to build... (Shift+Enter for new line)"
+                            rows="1"
+                        ></textarea>
+                        <button id="sendButton">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
