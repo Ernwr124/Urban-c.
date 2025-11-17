@@ -93,8 +93,8 @@ class User(Base):
     # Skills (manually entered for accurate matching)
     skills = Column(Text, default="")  # Comma-separated or structured text
     
-    # Language preference
-    language = Column(String, default="en")  # 'en', 'ru', 'kk'
+    # Language preference (always Russian)
+    language = Column(String, default="ru")  # Always 'ru' for Russian
     
     # Social links
     linkedin_url = Column(String, default="")
@@ -212,64 +212,87 @@ def parse_resume(filename: str, file_content: bytes) -> str:
         return "[Unsupported file format]"
 
 
-async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "", language: str = "en") -> Dict[str, Any]:
-    """Compare resume with job description using Ollama"""
+async def compare_resume_with_job(resume_text: str, job_description: str, candidate_skills: str = "", language: str = "ru") -> Dict[str, Any]:
+    """Compare resume with job description using Ollama - Always in Russian"""
     
-    # Language instructions
-    language_instructions = {
-        "en": "Respond in English. Provide all analysis and recommendations in English.",
-        "ru": "Отвечай на русском языке. Все тексты, анализ, рекомендации и оценки должны быть СТРОГО на русском языке.",
-        "kk": "Қазақ тілінде жауап беріңіз. Барлық мәтіндер, талдау, ұсыныстар және бағалар ТІКЕЛЕЙ қазақ тілінде болуы керек."
-    }
-    
-    lang_instruction = language_instructions.get(language, language_instructions["en"])
-    
+    # Always use Russian language for analysis
     skills_section = ""
     if candidate_skills:
         skills_section = f"""
 
-CANDIDATE'S CONFIRMED SKILLS:
+ПОДТВЕРЖДЁННЫЕ НАВЫКИ КАНДИДАТА:
 {candidate_skills}
 
-IMPORTANT: These are the skills the candidate has explicitly confirmed they possess. 
-Use these as the PRIMARY SOURCE when evaluating skills match.
-Only mark skills as "matched" if they appear in this confirmed skills list.
-If a skill is in the resume but NOT in the confirmed skills list, be cautious."""
+ВАЖНО: Это навыки, которые кандидат явно подтвердил. 
+Используй их как ПЕРВИЧНЫЙ ИСТОЧНИК при оценке соответствия навыков.
+Помечай навыки как "совпадающие" ТОЛЬКО если они есть в этом списке подтверждённых навыков.
+Если навык есть в резюме, но НЕТ в списке подтверждённых навыков, будь осторожен."""
     
-    prompt = f"""{lang_instruction}
+    prompt = f"""Ты - эксперт HR-аналитик и карьерный консультант. Твоя задача - провести МАКСИМАЛЬНО ДЕТАЛЬНЫЙ и ТОЧНЫЙ анализ соответствия резюме кандидата описанию вакансии.
+
+ОТВЕЧАЙ СТРОГО НА РУССКОМ ЯЗЫКЕ. Все тексты, анализы, рекомендации и оценки должны быть ТОЛЬКО НА РУССКОМ.
+
+ТРЕБОВАНИЯ К АНАЛИЗУ:
+1. Будь максимально детальным - давай 7-10 пунктов в каждой категории
+2. Будь честным и конструктивным
+3. Указывай конкретные примеры из резюме
+4. Давай практичные и реализуемые рекомендации
+5. Анализируй не только наличие навыков, но и их глубину
 
 Compare this resume with the job description and provide detailed analysis in JSON format.
 
-RESUME:
+РЕЗЮМЕ КАНДИДАТА:
 {resume_text}
 {skills_section}
 
-JOB DESCRIPTION:
+ОПИСАНИЕ ВАКАНСИИ:
 {job_description}
 
-Analyze and return ONLY valid JSON with this exact structure:
+Проведи глубокий анализ и верни ТОЛЬКО валидный JSON со следующей структурой:
 {{
-    "match_score": 0-100,
-    "pros": ["list of 5-7 strengths that match job requirements"],
-    "cons": ["list of 5-7 gaps or missing requirements"],
+    "match_score": 0-100,  // Честная оценка соответствия
+    "pros": [
+        "Минимум 7-10 конкретных сильных сторон кандидата для этой позиции",
+        "Указывай конкретные примеры из резюме",
+        "Отмечай глубину опыта и уровень владения навыками",
+        "Подчеркивай уникальные достижения и преимущества"
+    ],
+    "cons": [
+        "Минимум 7-10 конкретных пробелов или недостающих требований",
+        "Указывай что именно отсутствует или недостаточно развито",
+        "Отмечай несоответствия в уровне опыта",
+        "Будь конструктивным и указывай пути улучшения"
+    ],
     "skills_match": {{
-        "matched_skills": ["skills that match"],
-        "missing_skills": ["required skills not in resume"],
-        "additional_skills": ["extra skills candidate has"]
+        "matched_skills": ["Навыки кандидата, которые ТОЧНО соответствуют требованиям вакансии"],
+        "missing_skills": ["Требуемые навыки, которых НЕТ в резюме"],
+        "additional_skills": ["Дополнительные полезные навыки кандидата, не указанные в вакансии"]
     }},
     "experience_match": {{
         "score": 0-100,
-        "analysis": "detailed comparison text"
+        "analysis": "Детальный анализ опыта работы на русском языке: соответствие лет опыта, релевантность проектов, уровень ответственности, достижения. Минимум 3-4 предложения."
     }},
     "education_match": {{
         "score": 0-100,
-        "analysis": "detailed comparison text"
+        "analysis": "Детальный анализ образования на русском языке: соответствие специальности, уровень образования, дополнительные курсы и сертификаты. Минимум 2-3 предложения."
     }},
-    "recommendations": ["5-7 specific actions to improve match"],
-    "summary": "2-3 sentence overall assessment"
+    "recommendations": [
+        "Минимум 7-10 конкретных и практичных действий для улучшения соответствия",
+        "Каждая рекомендация должна быть реализуемой и специфичной",
+        "Укажи приоритетность действий",
+        "Предложи конкретные курсы, сертификаты или направления развития"
+    ],
+    "summary": "Детальное резюме на русском языке (3-5 предложений): общая оценка кандидата, ключевые сильные стороны, основные пробелы, потенциал для позиции, рекомендация по найму"
 }}
 
-Return only the JSON, no other text."""
+КРИТИЧЕСКИ ВАЖНО:
+- ВСЕ тексты должны быть ТОЛЬКО на русском языке
+- Давай ДЕТАЛЬНЫЙ анализ, а не поверхностный
+- Будь ЧЕСТНЫМ в оценках
+- Указывай КОНКРЕТНЫЕ примеры
+- Рекомендации должны быть РЕАЛИЗУЕМЫМИ
+
+Верни ТОЛЬКО JSON, без дополнительного текста."""
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -910,58 +933,6 @@ body {
     color: var(--white);
 }
 
-.language-selector {
-    position: relative;
-}
-
-.lang-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--white);
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.lang-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.lang-menu {
-    display: none;
-    position: absolute;
-    top: 48px;
-    right: 0;
-    background: rgba(20, 20, 20, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 8px;
-    min-width: 160px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    z-index: 100;
-}
-
-.lang-option {
-    width: 100%;
-    background: transparent;
-    border: none;
-    color: var(--white);
-    padding: 10px 16px;
-    text-align: left;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 14px;
-    transition: background 0.2s;
-}
-
-.lang-option:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -1413,38 +1384,24 @@ textarea.form-control {
 def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     """Generate base HTML"""
     
-    # Get user's language preference
-    lang = user.language if user else "en"
+    # Always use Russian language
+    lang = "ru"
     
     if user:
-        # Language display names
-        lang_names = {"en": "English", "ru": "Русский", "kk": "Қазақша"}
-        current_lang_name = lang_names.get(lang, "English")
-        
         nav_links = f"""
             <a href="/dashboard" class="nav-link">{t('dashboard', lang)}</a>
             <a href="/analyze" class="nav-link">{t('analyze', lang)}</a>
             <a href="/profile" class="nav-link">{user.full_name}</a>
-            <div class="language-selector">
-                <button class="lang-btn" onclick="toggleLangMenu()">{current_lang_name} ▾</button>
-                <div class="lang-menu" id="langMenu">
-                    <form method="POST" action="/change-language" style="display: contents;">
-                        <button type="submit" name="language" value="en" class="lang-option">English</button>
-                        <button type="submit" name="language" value="ru" class="lang-option">Русский</button>
-                        <button type="submit" name="language" value="kk" class="lang-option">Қазақша</button>
-                    </form>
-                </div>
-            </div>
             <a href="/logout" class="nav-link">{t('sign_out', lang)}</a>
         """
     else:
         nav_links = f"""
-            <a href="/login" class="nav-link">Sign in</a>
-            <a href="/register" class="btn">Get Started</a>
+            <a href="/login" class="nav-link">Войти</a>
+            <a href="/register" class="btn">Начать</a>
         """
     
     return f"""<!DOCTYPE html>
-<html lang="{lang}">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1463,20 +1420,6 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
     <main>
         {content}
     </main>
-    <script>
-        function toggleLangMenu() {{
-            const menu = document.getElementById('langMenu');
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-        }}
-        
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {{
-            const langSelector = document.querySelector('.language-selector');
-            if (langSelector && !langSelector.contains(event.target)) {{
-                document.getElementById('langMenu').style.display = 'none';
-            }}
-        }});
-    </script>
 </body>
 </html>"""
 
@@ -1486,126 +1429,126 @@ def get_base_html(title: str, content: str, user: Optional[User] = None) -> str:
 # ============================================================================
 
 def landing_page() -> str:
-    """Landing page"""
+    """Landing page - Russian only"""
     content = """
     <div class="hero">
-        <h1>Match Your Resume<br>with Your Dream Job</h1>
-        <p>AI-powered analysis that compares your resume with job descriptions. Get instant feedback on how well you match the position.</p>
+        <h1>Сравните резюме<br>с работой мечты</h1>
+        <p>ИИ-анализ сравнивает ваше резюме с описанием вакансии. Мгновенная обратная связь о том, насколько вы подходите на позицию.</p>
         <div style="display: flex; gap: 16px; justify-content: center;">
-            <a href="/register" class="btn btn-large">Get Started</a>
-            <a href="/login" class="btn btn-outline btn-large">Sign In</a>
+            <a href="/register" class="btn btn-large">Начать</a>
+            <a href="/login" class="btn btn-outline btn-large">Войти</a>
         </div>
     </div>
     
     <div class="container">
         <div class="grid-2">
             <div class="card">
-                <h3>Match Percentage</h3>
-                <p class="text-muted">See exactly how well your resume aligns with job requirements. Clear percentage score with detailed breakdown.</p>
+                <h3>Процент соответствия</h3>
+                <p class="text-muted">Узнайте точно, насколько ваше резюме соответствует требованиям вакансии. Четкая оценка с детальной разбивкой.</p>
             </div>
             
             <div class="card">
-                <h3>Pros & Cons</h3>
-                <p class="text-muted">Discover your strengths for the position and areas where you need improvement. Honest, actionable feedback.</p>
+                <h3>Плюсы и минусы</h3>
+                <p class="text-muted">Узнайте ваши сильные стороны для позиции и области для улучшения. Честная и практичная обратная связь.</p>
             </div>
             
             <div class="card">
-                <h3>Skills Analysis</h3>
-                <p class="text-muted">Identify matched skills, missing requirements, and additional qualifications you bring to the table.</p>
+                <h3>Анализ навыков</h3>
+                <p class="text-muted">Определите совпадающие навыки, недостающие требования и дополнительную квалификацию, которую вы можете предложить.</p>
             </div>
             
             <div class="card">
-                <h3>Smart Recommendations</h3>
-                <p class="text-muted">Get specific advice on improving your match score. Powered by Ollama AI (gpt-oss:20b-cloud).</p>
+                <h3>Умные рекомендации</h3>
+                <p class="text-muted">Получите конкретные советы по улучшению соответствия. Работает на Ollama AI (gpt-oss:20b-cloud).</p>
             </div>
         </div>
     </div>
     """
-    return get_base_html("Home", content)
+    return get_base_html("Главная", content)
 
 
 def login_page(error: str = "") -> str:
-    """Login page"""
+    """Login page - Russian only"""
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     content = f"""
     <div class="container-sm">
         <div class="card">
-            <h2>Welcome back</h2>
-            <p class="text-muted" style="margin-bottom: 32px;">Sign in to your HR Agent account</p>
+            <h2>С возвращением</h2>
+            <p class="text-muted" style="margin-bottom: 32px;">Войдите в свой аккаунт HR Agent</p>
             
             {error_html}
             
             <form method="POST" action="/login">
                 <div class="form-group">
                     <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" required placeholder="you@example.com">
+                    <input type="email" name="email" class="form-control" required placeholder="ваш@email.com">
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Password</label>
+                    <label class="form-label">Пароль</label>
                     <input type="password" name="password" class="form-control" required placeholder="••••••••">
                 </div>
                 
-                <button type="submit" class="btn btn-block btn-large">Sign In</button>
+                <button type="submit" class="btn btn-block btn-large">Войти</button>
             </form>
             
             <div class="divider"></div>
             
             <p class="text-muted text-sm" style="text-align: center;">
-                Don't have an account? <a href="/register" style="color: var(--white); text-decoration: underline;">Create one</a>
+                Нет аккаунта? <a href="/register" style="color: var(--white); text-decoration: underline;">Создать</a>
             </p>
         </div>
     </div>
     """
-    return get_base_html("Sign in", content)
+    return get_base_html("Вход", content)
 
 
 def register_page(error: str = "") -> str:
-    """Register page"""
+    """Register page - Russian only"""
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     content = f"""
     <div class="container-sm">
         <div class="card">
-            <h2>Create account</h2>
-            <p class="text-muted" style="margin-bottom: 32px;">Get started with HR Agent</p>
+            <h2>Создать аккаунт</h2>
+            <p class="text-muted" style="margin-bottom: 32px;">Начните работу с HR Agent</p>
             
             {error_html}
             
             <form method="POST" action="/register">
                 <div class="form-group">
-                    <label class="form-label">Full Name</label>
-                    <input type="text" name="full_name" class="form-control" required placeholder="John Doe">
+                    <label class="form-label">Полное имя</label>
+                    <input type="text" name="full_name" class="form-control" required placeholder="Иван Иванов">
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" required placeholder="you@example.com">
+                    <input type="email" name="email" class="form-control" required placeholder="ваш@email.com">
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required minlength="6" placeholder="Minimum 6 characters">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-control" required minlength="6" placeholder="Минимум 6 символов">
                 </div>
                 
-                <button type="submit" class="btn btn-block btn-large">Create Account</button>
+                <button type="submit" class="btn btn-block btn-large">Создать аккаунт</button>
             </form>
             
             <div class="divider"></div>
             
             <p class="text-muted text-sm" style="text-align: center;">
-                Already have an account? <a href="/login" style="color: var(--white); text-decoration: underline;">Sign in</a>
+                Уже есть аккаунт? <a href="/login" style="color: var(--white); text-decoration: underline;">Войти</a>
             </p>
         </div>
     </div>
     """
-    return get_base_html("Sign up", content)
+    return get_base_html("Регистрация", content)
 
 
 def dashboard_page(user: User, db: Session) -> str:
-    """Dashboard page"""
-    lang = user.language if user else "en"
+    """Dashboard page - Russian only"""
+    lang = "ru"  # Always Russian
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
     recent_analyses = db.query(Analysis).filter(
@@ -1689,7 +1632,8 @@ def dashboard_page(user: User, db: Session) -> str:
 
 
 def profile_page(user: User, db: Session) -> str:
-    """LinkedIn-style profile page"""
+    """LinkedIn-style profile page - Russian only"""
+    lang = "ru"  # Always Russian
     
     total_analyses = db.query(Analysis).filter(Analysis.user_id == user.id).count()
     
@@ -1945,7 +1889,8 @@ def profile_page(user: User, db: Session) -> str:
 
 
 def edit_profile_page(user: User, error: str = "", success: str = "") -> str:
-    """Edit profile page"""
+    """Edit profile page - Russian only"""
+    lang = "ru"  # Always Russian
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     success_html = f'<div class="alert alert-success">{success}</div>' if success else ""
     
@@ -2064,7 +2009,8 @@ Problem Solving, Team Leadership, Agile" style="min-height: 180px;">{user.skills
 
 
 def upload_resume_profile_page(user: User, error: str = "", show_skills_form: bool = False) -> str:
-    """Upload resume to profile page"""
+    """Upload resume to profile page - Russian only"""
+    lang = "ru"  # Always Russian
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     # Show skills form after upload
@@ -2147,8 +2093,8 @@ Problem Solving, Team Leadership">{user.skills or ''}</textarea>
 
 
 def analyze_page(user: User, error: str = "") -> str:
-    """Analyze page"""
-    lang = user.language if user else "en"
+    """Analyze page - Russian only"""
+    lang = "ru"  # Always Russian
     error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
     
     content = f"""
@@ -2224,8 +2170,8 @@ Responsibilities:
 
 
 def result_page(user: User, analysis: Analysis) -> str:
-    """Result page"""
-    lang = user.language if user else "en"
+    """Result page - Russian only"""
+    lang = "ru"  # Always Russian
     
     data = json.loads(analysis.analysis_data)
     score = analysis.match_score
@@ -2374,21 +2320,7 @@ async def startup_event():
     print("=" * 50)
 
 
-@app.post("/change-language")
-async def change_language(
-    language: str = Form(...),
-    session_token: Optional[str] = Cookie(None),
-    db: Session = Depends(get_db)
-):
-    """Change user's language preference"""
-    user = await get_current_user(session_token, db)
-    if user:
-        user.language = language
-        db.commit()
-    
-    # Redirect back to referrer or dashboard
-    response = RedirectResponse(url="/dashboard", status_code=303)
-    return response
+# Language change removed - always Russian now
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -2681,10 +2613,8 @@ async def analyze_post(
     if use_profile_skills == "yes" and user.skills:
         candidate_skills = user.skills
     
-    # Use user's language preference for AI analysis
-    user_language = user.language if user.language else "en"
-    
-    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills, user_language)
+    # Always use Russian for AI analysis
+    analysis_data = await compare_resume_with_job(resume_text, job_description, candidate_skills, "ru")
     
     analysis = Analysis(
         user_id=user.id,
