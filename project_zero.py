@@ -1,25 +1,24 @@
 """
 Project-0 (Production SaaS) - AI MVP Generator
-Professional version with authentication, user profiles, and security
+Simple session-based authentication with beautiful landing page
 """
 
-from fastapi import FastAPI, Request, Depends, HTTPException, Cookie
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, Response
+from fastapi import FastAPI, Request, Depends, HTTPException, Cookie, Response
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 import httpx
 import json
 import asyncio
 from typing import AsyncGenerator, Dict, Optional
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 import io
 import zipfile
 import sqlite3
 import hashlib
 import secrets
-import jwt
 from contextlib import contextmanager
 
 app = FastAPI(title="Project-0", description="AI-Powered MVP Generator")
@@ -35,7 +34,6 @@ app.add_middleware(
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "glm-4.6:cloud"
-SECRET_KEY = secrets.token_urlsafe(32)
 DATABASE_NAME = "project_zero.db"
 
 # System prompt for MVP generation
@@ -106,10 +104,11 @@ def init_database():
                       username TEXT UNIQUE NOT NULL,
                       email TEXT UNIQUE NOT NULL,
                       password_hash TEXT NOT NULL,
+                      session_token TEXT,
                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                       last_login TIMESTAMP)''')
         
-        # MVPs table (store user's generated MVPs)
+        # MVPs table
         c.execute('''CREATE TABLE IF NOT EXISTS mvps
                      (id TEXT PRIMARY KEY,
                       user_id INTEGER NOT NULL,
@@ -121,7 +120,6 @@ def init_database():
         
         conn.commit()
 
-# Initialize database on startup
 init_database()
 
 # ==================== SECURITY ====================
@@ -140,22 +138,9 @@ def verify_password(password: str, password_hash: str) -> bool:
     except:
         return False
 
-def create_token(user_id: int, username: str) -> str:
-    """Create JWT token"""
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "exp": datetime.utcnow() + timedelta(days=30)
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-def verify_token(token: str) -> Optional[Dict]:
-    """Verify JWT token"""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        return payload
-    except:
-        return None
+def create_session_token() -> str:
+    """Create simple session token"""
+    return secrets.token_urlsafe(32)
 
 # ==================== MODELS ====================
 
@@ -171,27 +156,21 @@ class LoginRequest(BaseModel):
 class GenerateRequest(BaseModel):
     idea: str
 
-# ==================== AUTH DEPENDENCY ====================
+# ==================== AUTH ====================
 
 async def get_current_user(session_token: Optional[str] = Cookie(None)):
     """Get current user from session token"""
     if not session_token:
         return None
     
-    payload = verify_token(session_token)
-    if not payload:
-        return None
-    
     with get_db() as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE id = ?", (payload["user_id"],))
+        c.execute("SELECT * FROM users WHERE session_token = ?", (session_token,))
         user = c.fetchone()
         return dict(user) if user else None
 
-# ==================== AUTH ENDPOINTS ====================
-
 @app.post("/api/auth/register")
-async def register(data: RegisterRequest):
+async def register(data: RegisterRequest, response: Response):
     """Register new user"""
     try:
         with get_db() as conn:
@@ -205,16 +184,16 @@ async def register(data: RegisterRequest):
             
             # Create user
             password_hash = hash_password(data.password)
-            c.execute("""INSERT INTO users (username, email, password_hash, last_login) 
-                        VALUES (?, ?, ?, ?)""",
-                     (data.username, data.email, password_hash, datetime.now()))
+            session_token = create_session_token()
+            
+            c.execute("""INSERT INTO users (username, email, password_hash, session_token, last_login) 
+                        VALUES (?, ?, ?, ?, ?)""",
+                     (data.username, data.email, password_hash, session_token, datetime.now()))
             conn.commit()
             
             user_id = c.lastrowid
             
-            # Create token
-            token = create_token(user_id, data.username)
-            
+            # Set cookie
             response = JSONResponse({
                 "success": True,
                 "user": {
@@ -225,9 +204,9 @@ async def register(data: RegisterRequest):
             })
             response.set_cookie(
                 key="session_token",
-                value=token,
+                value=session_token,
                 httponly=True,
-                max_age=30*24*60*60,  # 30 days
+                max_age=30*24*60*60,
                 samesite="lax"
             )
             return response
@@ -236,7 +215,7 @@ async def register(data: RegisterRequest):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/api/auth/login")
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, response: Response):
     """Login user"""
     try:
         with get_db() as conn:
@@ -247,13 +226,11 @@ async def login(data: LoginRequest):
             if not user or not verify_password(data.password, user["password_hash"]):
                 return JSONResponse({"error": "Invalid credentials"}, status_code=401)
             
-            # Update last login
-            c.execute("UPDATE users SET last_login = ? WHERE id = ?", 
-                     (datetime.now(), user["id"]))
+            # Create new session token
+            session_token = create_session_token()
+            c.execute("UPDATE users SET session_token = ?, last_login = ? WHERE id = ?", 
+                     (session_token, datetime.now(), user["id"]))
             conn.commit()
-            
-            # Create token
-            token = create_token(user["id"], user["username"])
             
             response = JSONResponse({
                 "success": True,
@@ -265,9 +242,9 @@ async def login(data: LoginRequest):
             })
             response.set_cookie(
                 key="session_token",
-                value=token,
+                value=session_token,
                 httponly=True,
-                max_age=30*24*60*60,  # 30 days
+                max_age=30*24*60*60,
                 samesite="lax"
             )
             return response
@@ -276,8 +253,14 @@ async def login(data: LoginRequest):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/api/auth/logout")
-async def logout():
+async def logout(user = Depends(get_current_user)):
     """Logout user"""
+    if user:
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET session_token = NULL WHERE id = ?", (user["id"],))
+            conn.commit()
+    
     response = JSONResponse({"success": True})
     response.delete_cookie("session_token")
     return response
@@ -341,7 +324,6 @@ async def generate_mvp(idea: str, user_id: int) -> AsyncGenerator[str, None]:
                                 html_code = extract_html(full_response)
                                 mvp_id = str(int(time.time() * 1000))
                                 
-                                # Save to database
                                 with get_db() as conn:
                                     c = conn.cursor()
                                     c.execute("""INSERT INTO mvps (id, user_id, idea, code, markdown) 
@@ -437,7 +419,6 @@ async def download_project(mvp_id: str, user = Depends(get_current_user)):
         if not mvp:
             return JSONResponse({"error": "MVP not found"}, status_code=404)
         
-        # Create ZIP file in memory
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -463,15 +444,6 @@ Date: {mvp["created_at"]}
 Generated with ❤️ by Project-0
 """
             zip_file.writestr('README.md', readme_content)
-            
-            info_content = f"""Project: {mvp["idea"]}
-Generated: {mvp["created_at"]}
-MVP ID: {mvp_id}
-
-This is a self-contained HTML project.
-Everything you need is in index.html.
-"""
-            zip_file.writestr('PROJECT-INFO.txt', info_content)
         
         zip_buffer.seek(0)
         
@@ -508,31 +480,28 @@ async def root(session_token: Optional[str] = Cookie(None)):
     """Serve landing page or app based on auth status"""
     user = None
     if session_token:
-        payload = verify_token(session_token)
-        if payload:
-            with get_db() as conn:
-                c = conn.cursor()
-                c.execute("SELECT * FROM users WHERE id = ?", (payload["user_id"],))
-                user_row = c.fetchone()
-                if user_row:
-                    user = dict(user_row)
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE session_token = ?", (session_token,))
+            user_row = c.fetchone()
+            if user_row:
+                user = dict(user_row)
     
     if user:
-        # Return main app
         return APP_TEMPLATE
     else:
-        # Return landing page
         return LANDING_TEMPLATE
 
-# Landing Page Template
+# ==================== LANDING PAGE ====================
+
 LANDING_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project-0 - AI MVP Generator</title>
+    <title>Project-0 - Transform Ideas Into Reality</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
         * {
             margin: 0;
@@ -540,18 +509,69 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             box-sizing: border-box;
         }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #000;
-            color: #fff;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
+        :root {
+            --black: #000000;
+            --white: #ffffff;
+            --gray-50: #fafafa;
+            --gray-100: #f5f5f5;
+            --gray-200: #e5e5e5;
+            --gray-300: #d4d4d4;
+            --gray-400: #a3a3a3;
+            --gray-500: #737373;
+            --gray-600: #525252;
+            --gray-700: #404040;
+            --gray-800: #262626;
+            --gray-900: #171717;
         }
 
-        .landing {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--black);
+            color: var(--white);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Animated Background */
+        .bg-animated {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-gradient {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.15;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .bg-gradient-1 {
+            background: radial-gradient(circle, var(--white) 0%, transparent 70%);
+            top: -200px;
+            left: -200px;
+            animation-delay: 0s;
+        }
+
+        .bg-gradient-2 {
+            background: radial-gradient(circle, var(--white) 0%, transparent 70%);
+            bottom: -200px;
+            right: -200px;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(100px, -100px) scale(1.1); }
+            66% { transform: translate(-100px, 100px) scale(0.9); }
         }
 
         /* Header */
@@ -560,110 +580,142 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             top: 0;
             left: 0;
             right: 0;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
             padding: 20px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 100;
         }
 
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
+            text-decoration: none;
+            color: var(--white);
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: translateX(5px);
         }
 
         .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: #fff;
-            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            background: var(--white);
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
-            font-size: 20px;
-            color: #000;
+            font-weight: 900;
+            font-size: 22px;
+            color: var(--black);
+            letter-spacing: -2px;
         }
 
         .logo-text {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -1px;
         }
 
         .header-btn {
-            padding: 10px 20px;
-            background: #fff;
-            color: #000;
+            padding: 12px 28px;
+            background: var(--white);
+            color: var(--black);
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 15px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-family: 'Inter', sans-serif;
         }
 
         .header-btn:hover {
-            background: #e5e5e5;
             transform: translateY(-2px);
+            box-shadow: 0 20px 60px rgba(255, 255, 255, 0.3);
         }
 
-        /* Hero */
+        /* Hero Section */
         .hero {
-            flex: 1;
+            position: relative;
+            min-height: 100vh;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 120px 40px 80px;
             text-align: center;
+            padding: 120px 40px 80px;
+        }
+
+        .hero-content {
+            max-width: 1000px;
             position: relative;
-            background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+            z-index: 1;
         }
 
         .hero-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
+            padding: 8px 20px;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 100px;
-            font-size: 13px;
-            font-weight: 500;
-            margin-bottom: 24px;
-            animation: fadeInDown 0.6s ease-out;
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 32px;
+            animation: fadeInUp 0.8s ease-out 0.2s backwards;
         }
 
         .hero-title {
-            font-size: 72px;
-            font-weight: 800;
-            letter-spacing: -2px;
+            font-size: 80px;
+            font-weight: 900;
+            letter-spacing: -3px;
             line-height: 1.1;
-            margin-bottom: 20px;
-            animation: fadeInUp 0.6s ease-out 0.1s backwards;
+            margin-bottom: 24px;
+            background: linear-gradient(to bottom, var(--white), var(--gray-400));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeInUp 0.8s ease-out 0.3s backwards;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+            color: var(--gray-400);
+            max-width: 700px;
+            margin: 0 auto 48px;
+            line-height: 1.6;
+            font-weight: 400;
+            animation: fadeInUp 0.8s ease-out 0.4s backwards;
         }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(40px);
             }
             to {
                 opacity: 1;
@@ -671,80 +723,292 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        .hero-subtitle {
-            font-size: 20px;
-            color: rgba(255, 255, 255, 0.7);
-            max-width: 600px;
-            margin-bottom: 40px;
-            line-height: 1.6;
-            animation: fadeInUp 0.6s ease-out 0.2s backwards;
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s ease-out 0.5s backwards;
         }
 
-        .cta-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 18px 36px;
-            background: #fff;
-            color: #000;
+        .cta-primary {
+            padding: 18px 48px;
+            background: var(--white);
+            color: var(--black);
             border: none;
             border-radius: 12px;
-            font-weight: 700;
-            font-size: 16px;
+            font-weight: 800;
+            font-size: 17px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             font-family: 'Inter', sans-serif;
             box-shadow: 0 10px 40px rgba(255, 255, 255, 0.2);
-            animation: fadeInUp 0.6s ease-out 0.3s backwards;
+            position: relative;
+            overflow: hidden;
         }
 
-        .cta-btn:hover {
+        .cta-primary:before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--gray-200);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .cta-primary:hover:before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .cta-primary:hover {
             transform: translateY(-4px);
-            box-shadow: 0 20px 60px rgba(255, 255, 255, 0.3);
+            box-shadow: 0 30px 80px rgba(255, 255, 255, 0.4);
         }
 
-        /* Features */
+        .cta-primary span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-secondary {
+            padding: 18px 48px;
+            background: transparent;
+            color: var(--white);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 17px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .cta-secondary:hover {
+            border-color: var(--white);
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Features Section */
         .features {
-            padding: 80px 40px;
+            position: relative;
+            padding: 120px 40px;
+            background: linear-gradient(180deg, var(--black) 0%, var(--gray-900) 100%);
+        }
+
+        .features-container {
             max-width: 1200px;
             margin: 0 auto;
         }
 
+        .section-title {
+            text-align: center;
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            margin-bottom: 16px;
+            background: linear-gradient(to bottom, var(--white), var(--gray-500));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            font-size: 18px;
+            color: var(--gray-400);
+            margin-bottom: 80px;
+        }
+
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
         }
 
         .feature-card {
-            padding: 32px;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            transition: all 0.3s;
+            border-radius: 20px;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--white), transparent);
+            opacity: 0;
+            transition: opacity 0.5s;
         }
 
         .feature-card:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-8px);
+        }
+
+        .feature-card:hover:before {
+            opacity: 0.5;
         }
 
         .feature-icon {
-            font-size: 32px;
-            margin-bottom: 16px;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 24px;
+            transition: all 0.5s;
+        }
+
+        .feature-card:hover .feature-icon {
+            background: var(--white);
+            transform: scale(1.1) rotate(5deg);
         }
 
         .feature-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 8px;
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
         }
 
         .feature-desc {
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--gray-400);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        /* Stats Section */
+        .stats {
+            padding: 100px 40px;
+            background: var(--black);
+        }
+
+        .stats-grid {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 60px;
+            text-align: center;
+        }
+
+        .stat-item {
+            animation: fadeInUp 1s ease-out backwards;
+        }
+
+        .stat-number {
+            font-size: 56px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            background: linear-gradient(135deg, var(--white), var(--gray-500));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: var(--gray-400);
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 120px 40px;
+            background: linear-gradient(180deg, var(--black) 0%, var(--gray-900) 100%);
+            text-align: center;
+        }
+
+        .cta-box {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 80px 60px;
+            background: var(--white);
+            color: var(--black);
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-box:before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0,0,0,0.05), transparent);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .cta-box-title {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .cta-box-subtitle {
+            font-size: 18px;
+            color: var(--gray-600);
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .cta-box-btn {
+            padding: 20px 60px;
+            background: var(--black);
+            color: var(--white);
+            border: none;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+            position: relative;
+        }
+
+        .cta-box-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 60px 40px;
+            background: var(--black);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .footer-text {
+            color: var(--gray-500);
             font-size: 14px;
-            line-height: 1.6;
         }
 
         /* Auth Modal */
@@ -755,8 +1019,8 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -773,23 +1037,21 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
         }
 
         .auth-panel {
-            background: #fff;
-            color: #000;
-            padding: 48px;
-            border-radius: 24px;
-            max-width: 420px;
+            background: var(--white);
+            color: var(--black);
+            padding: 60px;
+            border-radius: 30px;
+            max-width: 480px;
             width: 90%;
-            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8),
-                        0 0 0 1px rgba(255, 255, 255, 0.1);
-            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-style: preserve-3d;
-            perspective: 1000px;
+            box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
+            animation: modalSlide 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
         }
 
-        @keyframes slideUp {
+        @keyframes modalSlide {
             from {
                 opacity: 0;
-                transform: translateY(40px) scale(0.95);
+                transform: translateY(60px) scale(0.9);
             }
             to {
                 opacity: 1;
@@ -797,63 +1059,87 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        .auth-header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .auth-logo {
-            width: 56px;
-            height: 56px;
-            background: #000;
-            border-radius: 12px;
+        .close-modal {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 40px;
+            height: 40px;
+            background: var(--gray-100);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
-            font-size: 28px;
-            color: #fff;
-            margin: 0 auto 16px;
+            transition: all 0.2s;
+            font-size: 20px;
+        }
+
+        .close-modal:hover {
+            background: var(--gray-200);
+            transform: rotate(90deg);
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .auth-logo {
+            width: 70px;
+            height: 70px;
+            background: var(--black);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 36px;
+            color: var(--white);
+            margin: 0 auto 24px;
+            letter-spacing: -2px;
         }
 
         .auth-title {
-            font-size: 24px;
-            font-weight: 800;
+            font-size: 32px;
+            font-weight: 900;
             margin-bottom: 8px;
+            letter-spacing: -1px;
         }
 
         .auth-subtitle {
-            color: #737373;
-            font-size: 14px;
+            color: var(--gray-600);
+            font-size: 15px;
         }
 
         .auth-tabs {
             display: flex;
             gap: 8px;
-            margin-bottom: 24px;
-            background: #f5f5f5;
-            padding: 4px;
-            border-radius: 12px;
+            margin-bottom: 32px;
+            background: var(--gray-100);
+            padding: 6px;
+            border-radius: 14px;
         }
 
         .auth-tab {
             flex: 1;
-            padding: 10px;
+            padding: 12px;
             background: transparent;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 15px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
             font-family: 'Inter', sans-serif;
-            color: #737373;
+            color: var(--gray-600);
         }
 
         .auth-tab.active {
-            background: #fff;
-            color: #000;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            background: var(--white);
+            color: var(--black);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .auth-form {
@@ -865,52 +1151,54 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
 
         .form-label {
             display: block;
-            font-weight: 600;
-            font-size: 13px;
+            font-weight: 700;
+            font-size: 14px;
             margin-bottom: 8px;
-            color: #171717;
+            color: var(--gray-900);
         }
 
         .form-input {
             width: 100%;
-            padding: 12px 14px;
-            background: #f5f5f5;
-            border: 1px solid #e5e5e5;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 14px 16px;
+            background: var(--gray-50);
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: 15px;
             font-family: 'Inter', sans-serif;
-            transition: all 0.2s;
+            transition: all 0.3s;
+            font-weight: 500;
         }
 
         .form-input:focus {
             outline: none;
-            background: #fff;
-            border-color: #000;
+            background: var(--white);
+            border-color: var(--black);
         }
 
         .form-submit {
             width: 100%;
-            padding: 14px;
-            background: #000;
-            color: #fff;
+            padding: 16px;
+            background: var(--black);
+            color: var(--white);
             border: none;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 15px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 16px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
             font-family: 'Inter', sans-serif;
             margin-top: 8px;
         }
 
         .form-submit:hover {
-            background: #262626;
+            background: var(--gray-900);
             transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
         .form-submit:disabled {
@@ -918,39 +1206,39 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             cursor: not-allowed;
         }
 
-        .close-modal {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 32px;
-            height: 32px;
-            background: rgba(0, 0, 0, 0.1);
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .close-modal:hover {
-            background: rgba(0, 0, 0, 0.2);
-        }
-
         .error-msg {
-            padding: 12px;
+            padding: 14px;
             background: #fee;
-            border: 1px solid #fcc;
-            border-radius: 8px;
+            border: 2px solid #fcc;
+            border-radius: 12px;
             color: #c00;
             font-size: 13px;
-            margin-bottom: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
             display: none;
         }
 
         .error-msg.active {
             display: block;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        /* Scroll Animation */
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(60px);
+            transition: all 0.8s ease-out;
+        }
+
+        .scroll-reveal.active {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         @media (max-width: 768px) {
@@ -965,73 +1253,146 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             .features-grid {
                 grid-template-columns: 1fr;
             }
+
+            .cta-box {
+                padding: 60px 40px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 40px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="landing">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo">
+    <div class="bg-animated">
+        <div class="bg-gradient bg-gradient-1"></div>
+        <div class="bg-gradient bg-gradient-2"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="#" class="logo">
                 <div class="logo-icon">0</div>
                 <div class="logo-text">Project-0</div>
-            </div>
+            </a>
             <button class="header-btn" onclick="showAuth('login')">Sign In</button>
         </div>
+    </header>
 
-        <!-- Hero -->
-        <div class="hero">
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
             <div class="hero-badge">
                 ✨ Powered by AI
             </div>
             <h1 class="hero-title">Transform Ideas<br>Into Reality</h1>
             <p class="hero-subtitle">
                 Generate production-ready MVPs in seconds using AI. 
-                No coding required, just describe your vision.
+                Beautiful, modern, and ready to ship. No coding required.
             </p>
-            <button class="cta-btn" onclick="showAuth('register')">
-                <span>Try it Now</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-            </button>
+            <div class="cta-buttons">
+                <button class="cta-primary" onclick="showAuth('register')">
+                    <span>Try it Now →</span>
+                </button>
+                <button class="cta-secondary" onclick="scrollToFeatures()">
+                    See How It Works
+                </button>
+            </div>
         </div>
+    </section>
 
-        <!-- Features -->
-        <div class="features">
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <h2 class="section-title scroll-reveal">Everything You Need</h2>
+            <p class="section-subtitle scroll-reveal">Powerful features for rapid MVP development</p>
+            
             <div class="features-grid">
-                <div class="feature-card">
+                <div class="feature-card scroll-reveal">
                     <div class="feature-icon">⚡</div>
-                    <div class="feature-title">Lightning Fast</div>
-                    <div class="feature-desc">Generate complete MVPs in seconds, not days. AI-powered efficiency at your fingertips.</div>
+                    <h3 class="feature-title">Lightning Fast</h3>
+                    <p class="feature-desc">Generate complete MVPs in seconds, not days. AI-powered efficiency that transforms your workflow.</p>
                 </div>
-                <div class="feature-card">
+
+                <div class="feature-card scroll-reveal">
                     <div class="feature-icon">🎨</div>
-                    <div class="feature-title">Beautiful Design</div>
-                    <div class="feature-desc">Modern, minimalist interfaces inspired by v0.dev design system. Production-ready from day one.</div>
+                    <h3 class="feature-title">Beautiful Design</h3>
+                    <p class="feature-desc">Modern, minimalist interfaces inspired by v0.dev. Every pixel perfect, every interaction smooth.</p>
                 </div>
-                <div class="feature-card">
+
+                <div class="feature-card scroll-reveal">
                     <div class="feature-icon">💼</div>
-                    <div class="feature-title">Export Ready</div>
-                    <div class="feature-desc">Download complete projects as ZIP files. All code, styles, and assets included.</div>
+                    <h3 class="feature-title">Export Ready</h3>
+                    <p class="feature-desc">Download complete projects as ZIP files. All code, styles, and assets included. Ready to deploy.</p>
+                </div>
+
+                <div class="feature-card scroll-reveal">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Secure & Private</h3>
+                    <p class="feature-desc">Your data is encrypted and protected. Industry-standard security for peace of mind.</p>
+                </div>
+
+                <div class="feature-card scroll-reveal">
+                    <div class="feature-icon">🚀</div>
+                    <h3 class="feature-title">Production Ready</h3>
+                    <p class="feature-desc">Clean, maintainable code. Responsive design. SEO optimized. Ready for real users.</p>
+                </div>
+
+                <div class="feature-card scroll-reveal">
+                    <div class="feature-icon">✨</div>
+                    <h3 class="feature-title">AI Powered</h3>
+                    <p class="feature-desc">Advanced language models understand your vision. Just describe what you want, we handle the rest.</p>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number">10x</div>
+                <div class="stat-label">Faster Development</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Production Ready</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Possibilities</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="cta-box scroll-reveal">
+            <h2 class="cta-box-title">Start Building Today</h2>
+            <p class="cta-box-subtitle">Join developers and entrepreneurs creating the future</p>
+            <button class="cta-box-btn" onclick="showAuth('register')">
+                Get Started Free
+            </button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p class="footer-text">© 2024 Project-0. Built with ❤️ for creators and innovators.</p>
+    </footer>
 
     <!-- Auth Modal -->
     <div class="auth-modal" id="authModal">
         <div class="auth-panel">
-            <button class="close-modal" onclick="closeAuth()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-            </button>
+            <button class="close-modal" onclick="closeAuth()">×</button>
 
             <div class="auth-header">
                 <div class="auth-logo">0</div>
-                <div class="auth-title">Welcome</div>
-                <div class="auth-subtitle">Sign in to start creating</div>
+                <h2 class="auth-title">Welcome</h2>
+                <p class="auth-subtitle">Sign in to start creating</p>
             </div>
 
             <div class="auth-tabs">
@@ -1074,6 +1435,27 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <script>
+        // Scroll reveal animation
+        const revealElements = document.querySelectorAll('.scroll-reveal');
+        
+        const revealOnScroll = () => {
+            revealElements.forEach(el => {
+                const elementTop = el.getBoundingClientRect().top;
+                const elementVisible = 150;
+                
+                if (elementTop < window.innerHeight - elementVisible) {
+                    el.classList.add('active');
+                }
+            });
+        };
+
+        window.addEventListener('scroll', revealOnScroll);
+        revealOnScroll();
+
+        function scrollToFeatures() {
+            document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
+        }
+
         function showAuth(tab = 'login') {
             document.getElementById('authModal').classList.add('active');
             switchTab(tab);
@@ -1085,12 +1467,9 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
         }
 
         function switchTab(tab) {
-            // Update tabs
             document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-            event?.target?.classList.add('active');
-
-            // Update forms
             document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+            
             if (tab === 'login') {
                 document.getElementById('loginForm').classList.add('active');
                 document.querySelectorAll('.auth-tab')[0].classList.add('active');
@@ -1098,7 +1477,6 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('registerForm').classList.add('active');
                 document.querySelectorAll('.auth-tab')[1].classList.add('active');
             }
-
             hideError();
         }
 
@@ -1167,7 +1545,6 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        // Close modal on outside click
         document.getElementById('authModal').addEventListener('click', (e) => {
             if (e.target.id === 'authModal') {
                 closeAuth();
@@ -1177,7 +1554,7 @@ LANDING_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# Main App Template (after login)
+# Main App Template (same as before, shortened for brevity)
 APP_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1187,13 +1564,7 @@ APP_TEMPLATE = """<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg-primary: #ffffff;
             --bg-secondary: #fafafa;
@@ -1205,7 +1576,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
             --text-tertiary: #737373;
             --accent: #000000;
         }
-
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
@@ -1214,619 +1584,93 @@ APP_TEMPLATE = """<!DOCTYPE html>
             overflow: hidden;
             -webkit-font-smoothing: antialiased;
         }
-
-        .container {
-            display: flex;
-            height: 100vh;
-        }
-
-        /* Left Panel */
-        .chat-panel {
-            width: 45%;
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--border-primary);
-            background: var(--bg-primary);
-        }
-
-        /* Right Panel */
-        .preview-panel {
-            width: 55%;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-secondary);
-        }
-
-        /* Header */
-        .header {
-            background: var(--bg-primary);
-            border-bottom: 1px solid var(--border-primary);
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 56px;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .logo-icon {
-            width: 28px;
-            height: 28px;
-            background: var(--accent);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 16px;
-            color: white;
-            letter-spacing: -0.5px;
-        }
-
-        .logo-text {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-primary);
-            letter-spacing: -0.3px;
-        }
-
-        /* Profile Button */
-        .profile-btn {
-            width: 36px;
-            height: 36px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            position: relative;
-        }
-
-        .profile-btn:hover {
-            opacity: 0.8;
-            transform: scale(1.05);
-        }
-
-        .profile-menu {
-            display: none;
-            position: absolute;
-            top: 48px;
-            right: 20px;
-            background: var(--bg-primary);
-            border: 1px solid var(--border-primary);
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            min-width: 200px;
-            z-index: 1000;
-            animation: slideDown 0.2s ease-out;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .profile-menu.active {
-            display: block;
-        }
-
-        .profile-menu-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-primary);
-        }
-
-        .profile-name {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .profile-email {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        .profile-menu-item {
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 13px;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .profile-menu-item:hover {
-            background: var(--bg-tertiary);
-        }
-
-        .profile-menu-item.danger {
-            color: #dc2626;
-        }
-
-        .profile-menu-item svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Messages */
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-        }
-
-        .message {
-            margin-bottom: 20px;
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-header {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 6px;
-        }
-
-        .message-role {
-            font-weight: 600;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-        }
-
-        .message-content {
-            padding: 12px 14px;
-            border-radius: 8px;
-            line-height: 1.6;
-            font-size: 13px;
-            color: var(--text-primary);
-        }
-
-        .user-message .message-content {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-primary);
-        }
-
-        .ai-message .message-content {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-primary);
-        }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-primary);
-            border-radius: 6px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-
-        .spinner {
-            width: 12px;
-            height: 12px;
-            border: 2px solid var(--border-secondary);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Markdown */
-        .markdown-content {
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .markdown-content h2 {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 16px 0 10px 0;
-            color: var(--text-primary);
-        }
-
-        .markdown-content h3 {
-            font-size: 14px;
-            font-weight: 600;
-            margin: 12px 0 8px 0;
-            color: var(--text-primary);
-        }
-
-        .markdown-content ul {
-            margin: 8px 0 8px 18px;
-        }
-
-        .markdown-content li {
-            margin: 4px 0;
-            color: var(--text-secondary);
-        }
-
-        .markdown-content code {
-            background: var(--bg-tertiary);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 12px;
-            color: var(--text-primary);
-            border: 1px solid var(--border-primary);
-        }
-
-        .markdown-content pre {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-primary);
-            border-radius: 8px;
-            padding: 14px;
-            overflow-x: auto;
-            margin: 10px 0;
-        }
-
-        .markdown-content pre code {
-            background: none;
-            padding: 0;
-            border: none;
-            color: var(--text-primary);
-        }
-
-        .markdown-content strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .markdown-content p {
-            margin: 8px 0;
-            color: var(--text-secondary);
-        }
-
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .action-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 500;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .action-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .action-btn.secondary {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-primary);
-        }
-
-        .action-btn.secondary:hover {
-            background: var(--bg-tertiary);
-        }
-
-        /* Input Area */
-        .input-area {
-            padding: 16px 20px;
-            background: var(--bg-primary);
-            border-top: 1px solid var(--border-primary);
-        }
-
-        .input-wrapper {
-            position: relative;
-        }
-
-        #ideaInput {
-            width: 100%;
-            padding: 12px 50px 12px 14px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-primary);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 13px;
-            font-family: 'Inter', sans-serif;
-            resize: none;
-            outline: none;
-            min-height: 44px;
-            max-height: 180px;
-            line-height: 1.5;
-        }
-
-        #ideaInput:focus {
-            border-color: var(--accent);
-            background: var(--bg-primary);
-        }
-
-        #ideaInput::placeholder {
-            color: var(--text-tertiary);
-        }
-
-        #generateBtn {
-            position: absolute;
-            right: 6px;
-            bottom: 6px;
-            width: 36px;
-            height: 36px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        #generateBtn:hover:not(:disabled) {
-            opacity: 0.9;
-        }
-
-        #generateBtn:disabled {
-            background: var(--border-secondary);
-            cursor: not-allowed;
-        }
-
-        /* Preview */
-        .preview-header {
-            padding: 12px 20px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-primary);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 56px;
-        }
-
-        .preview-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            letter-spacing: -0.2px;
-        }
-
-        .preview-actions {
-            display: flex;
-            gap: 6px;
-        }
-
-        .preview-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--bg-primary);
-            border: 1px solid var(--border-primary);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .preview-btn:hover {
-            background: var(--bg-tertiary);
-        }
-
-        .preview-btn svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        .preview-frame {
-            flex: 1;
-            background: white;
-            position: relative;
-        }
-
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
-        .preview-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-tertiary);
-            text-align: center;
-            padding: 40px;
-        }
-
-        .placeholder-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-primary);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            margin-bottom: 16px;
-        }
-
-        .placeholder-text {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-        }
-
-        .placeholder-hint {
-            font-size: 13px;
-            color: var(--text-tertiary);
-        }
-
-        /* Welcome */
-        .welcome {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            text-align: center;
-            min-height: 400px;
-        }
-
-        .welcome-logo {
-            width: 72px;
-            height: 72px;
-            background: var(--accent);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 32px;
-            color: white;
-            margin-bottom: 20px;
-            letter-spacing: -1px;
-        }
-
-        .welcome-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-            letter-spacing: -0.5px;
-        }
-
-        .welcome-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 28px;
-            max-width: 380px;
-            line-height: 1.5;
-        }
-
-        .example-ideas {
-            display: grid;
-            gap: 8px;
-            max-width: 420px;
-            width: 100%;
-        }
-
-        .example-idea {
-            padding: 12px 14px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-primary);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-        }
-
-        .example-idea:hover {
-            background: var(--bg-tertiary);
-            border-color: var(--border-secondary);
-            transform: translateY(-1px);
-        }
-
-        .example-title {
-            font-weight: 600;
-            margin-bottom: 2px;
-            font-size: 13px;
-            color: var(--text-primary);
-        }
-
-        .example-desc {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-secondary);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-tertiary);
-        }
-
+        .container { display: flex; height: 100vh; }
+        .chat-panel { width: 45%; display: flex; flex-direction: column; border-right: 1px solid var(--border-primary); background: var(--bg-primary); }
+        .preview-panel { width: 55%; display: flex; flex-direction: column; background: var(--bg-secondary); }
+        .header { background: var(--bg-primary); border-bottom: 1px solid var(--border-primary); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+        .logo { display: flex; align-items: center; gap: 10px; }
+        .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: white; letter-spacing: -0.5px; }
+        .logo-text { font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.3px; }
+        .profile-btn { width: 36px; height: 36px; background: var(--accent); color: white; border: none; border-radius: 50%; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; position: relative; }
+        .profile-btn:hover { opacity: 0.8; transform: scale(1.05); }
+        .profile-menu { display: none; position: absolute; top: 48px; right: 20px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1); min-width: 200px; z-index: 1000; animation: slideDown 0.2s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .profile-menu.active { display: block; }
+        .profile-menu-header { padding: 16px; border-bottom: 1px solid var(--border-primary); }
+        .profile-name { font-weight: 600; font-size: 14px; color: var(--text-primary); margin-bottom: 4px; }
+        .profile-email { font-size: 12px; color: var(--text-tertiary); }
+        .profile-menu-item { padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-primary); cursor: pointer; transition: all 0.2s; border: none; background: none; width: 100%; text-align: left; font-family: 'Inter', sans-serif; }
+        .profile-menu-item:hover { background: var(--bg-tertiary); }
+        .profile-menu-item.danger { color: #dc2626; }
+        .profile-menu-item svg { width: 16px; height: 16px; }
+        .messages { flex: 1; overflow-y: auto; padding: 20px; }
+        .message { margin-bottom: 20px; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .message-role { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+        .message-content { padding: 12px 14px; border-radius: 8px; line-height: 1.6; font-size: 13px; color: var(--text-primary); }
+        .user-message .message-content { background: var(--bg-tertiary); border: 1px solid var(--border-primary); }
+        .ai-message .message-content { background: var(--bg-secondary); border: 1px solid var(--border-primary); }
+        .status-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 6px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; font-weight: 500; }
+        .spinner { width: 12px; height: 12px; border: 2px solid var(--border-secondary); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .markdown-content { font-size: 13px; line-height: 1.6; }
+        .markdown-content h2 { font-size: 16px; font-weight: 600; margin: 16px 0 10px 0; color: var(--text-primary); }
+        .markdown-content h3 { font-size: 14px; font-weight: 600; margin: 12px 0 8px 0; color: var(--text-primary); }
+        .markdown-content ul { margin: 8px 0 8px 18px; }
+        .markdown-content li { margin: 4px 0; color: var(--text-secondary); }
+        .markdown-content code { background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; color: var(--text-primary); border: 1px solid var(--border-primary); }
+        .markdown-content pre { background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px; overflow-x: auto; margin: 10px 0; }
+        .markdown-content pre code { background: none; padding: 0; border: none; color: var(--text-primary); }
+        .markdown-content strong { color: var(--text-primary); font-weight: 600; }
+        .markdown-content p { margin: 8px 0; color: var(--text-secondary); }
+        .action-buttons { display: flex; gap: 8px; margin-top: 12px; }
+        .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 500; font-size: 12px; cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif; }
+        .action-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .action-btn.secondary { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-primary); }
+        .action-btn.secondary:hover { background: var(--bg-tertiary); }
+        .input-area { padding: 16px 20px; background: var(--bg-primary); border-top: 1px solid var(--border-primary); }
+        .input-wrapper { position: relative; }
+        #ideaInput { width: 100%; padding: 12px 50px 12px 14px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; color: var(--text-primary); font-size: 13px; font-family: 'Inter', sans-serif; resize: none; outline: none; min-height: 44px; max-height: 180px; line-height: 1.5; }
+        #ideaInput:focus { border-color: var(--accent); background: var(--bg-primary); }
+        #ideaInput::placeholder { color: var(--text-tertiary); }
+        #generateBtn { position: absolute; right: 6px; bottom: 6px; width: 36px; height: 36px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        #generateBtn:hover:not(:disabled) { opacity: 0.9; }
+        #generateBtn:disabled { background: var(--border-secondary); cursor: not-allowed; }
+        .preview-header { padding: 12px 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-primary); display: flex; align-items: center; justify-content: space-between; height: 56px; }
+        .preview-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.2px; }
+        .preview-actions { display: flex; gap: 6px; }
+        .preview-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 6px; color: var(--text-primary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif; }
+        .preview-btn:hover { background: var(--bg-tertiary); }
+        .preview-btn svg { width: 14px; height: 14px; }
+        .preview-frame { flex: 1; background: white; position: relative; }
+        iframe { width: 100%; height: 100%; border: none; }
+        .preview-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-tertiary); text-align: center; padding: 40px; }
+        .placeholder-icon { width: 64px; height: 64px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 16px; }
+        .placeholder-text { font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+        .placeholder-hint { font-size: 13px; color: var(--text-tertiary); }
+        .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; min-height: 400px; }
+        .welcome-logo { width: 72px; height: 72px; background: var(--accent); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 32px; color: white; margin-bottom: 20px; letter-spacing: -1px; }
+        .welcome-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); letter-spacing: -0.5px; }
+        .welcome-subtitle { font-size: 14px; color: var(--text-secondary); margin-bottom: 28px; max-width: 380px; line-height: 1.5; }
+        .example-ideas { display: grid; gap: 8px; max-width: 420px; width: 100%; }
+        .example-idea { padding: 12px 14px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; cursor: pointer; transition: all 0.2s; text-align: left; }
+        .example-idea:hover { background: var(--bg-tertiary); border-color: var(--border-secondary); transform: translateY(-1px); }
+        .example-title { font-weight: 600; margin-bottom: 2px; font-size: 13px; color: var(--text-primary); }
+        .example-desc { font-size: 12px; color: var(--text-tertiary); }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-secondary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
         @media (max-width: 1024px) {
-            .container {
-                flex-direction: column;
-            }
-            
-            .chat-panel {
-                width: 100%;
-                height: 60%;
-                border-right: none;
-                border-bottom: 1px solid var(--border-primary);
-            }
-            
-            .preview-panel {
-                width: 100%;
-                height: 40%;
-            }
+            .container { flex-direction: column; }
+            .chat-panel { width: 100%; height: 60%; border-right: none; border-bottom: 1px solid var(--border-primary); }
+            .preview-panel { width: 100%; height: 40%; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Chat Panel -->
         <div class="chat-panel">
             <div class="header">
                 <div class="logo">
@@ -1836,8 +1680,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 <button class="profile-btn" onclick="toggleProfile()" id="profileBtn">
                     <span id="profileInitial">U</span>
                 </button>
-                
-                <!-- Profile Menu -->
                 <div class="profile-menu" id="profileMenu">
                     <div class="profile-menu-header">
                         <div class="profile-name" id="profileName">Loading...</div>
@@ -1853,14 +1695,11 @@ APP_TEMPLATE = """<!DOCTYPE html>
                     </button>
                 </div>
             </div>
-
             <div class="messages" id="messages">
                 <div class="welcome">
                     <div class="welcome-logo">0</div>
                     <div class="welcome-title">AI MVP Generator</div>
-                    <div class="welcome-subtitle">
-                        Transform your ideas into production-ready prototypes with HTML, CSS, and JavaScript
-                    </div>
+                    <div class="welcome-subtitle">Transform your ideas into production-ready prototypes</div>
                     <div class="example-ideas">
                         <div class="example-idea" data-idea="Create a modern landing page for a SaaS product with hero section, features, pricing, and testimonials">
                             <div class="example-title">🚀 SaaS Landing Page</div>
@@ -1881,14 +1720,9 @@ APP_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
             </div>
-
             <div class="input-area">
                 <div class="input-wrapper">
-                    <textarea 
-                        id="ideaInput" 
-                        placeholder="Describe your MVP idea..."
-                        rows="1"
-                    ></textarea>
+                    <textarea id="ideaInput" placeholder="Describe your MVP idea..." rows="1"></textarea>
                     <button id="generateBtn">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -1897,8 +1731,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
         </div>
-
-        <!-- Preview Panel -->
         <div class="preview-panel">
             <div class="preview-header">
                 <div class="preview-title">Live Preview</div>
@@ -1934,12 +1766,10 @@ APP_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
     </div>
-
     <script>
         let isGenerating = false;
         let currentMvpId = null;
         let currentUser = null;
-
         const ideaInput = document.getElementById('ideaInput');
         const generateBtn = document.getElementById('generateBtn');
         const messagesDiv = document.getElementById('messages');
@@ -1947,8 +1777,7 @@ APP_TEMPLATE = """<!DOCTYPE html>
         const downloadBtn = document.getElementById('downloadBtn');
         const refreshBtn = document.getElementById('refreshBtn');
         const newWindowBtn = document.getElementById('newWindowBtn');
-
-        // Load user profile
+        
         async function loadProfile() {
             try {
                 const response = await fetch('/api/auth/me');
@@ -1964,21 +1793,18 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 console.error('Failed to load profile:', error);
             }
         }
-
         loadProfile();
-
+        
         function toggleProfile() {
-            const menu = document.getElementById('profileMenu');
-            menu.classList.toggle('active');
+            document.getElementById('profileMenu').classList.toggle('active');
         }
-
-        // Close profile menu when clicking outside
+        
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.profile-btn') && !e.target.closest('.profile-menu')) {
                 document.getElementById('profileMenu').classList.remove('active');
             }
         });
-
+        
         async function logout() {
             try {
                 await fetch('/api/auth/logout', { method: 'POST' });
@@ -1987,8 +1813,7 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 console.error('Logout failed:', error);
             }
         }
-
-        // Example ideas
+        
         document.querySelectorAll('.example-idea').forEach(el => {
             el.addEventListener('click', () => {
                 ideaInput.value = el.dataset.idea;
@@ -1996,15 +1821,13 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 autoResize();
             });
         });
-
-        // Auto-resize textarea
+        
         function autoResize() {
             ideaInput.style.height = 'auto';
             ideaInput.style.height = Math.min(ideaInput.scrollHeight, 180) + 'px';
         }
         ideaInput.addEventListener('input', autoResize);
-
-        // Generate
+        
         generateBtn.addEventListener('click', generate);
         ideaInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -2012,26 +1835,17 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 generate();
             }
         });
-
+        
         function generate() {
             const idea = ideaInput.value.trim();
             if (!idea || isGenerating) return;
-
             isGenerating = true;
             generateBtn.disabled = true;
-
-            // Remove welcome
             const welcome = document.querySelector('.welcome');
             if (welcome) welcome.remove();
-
-            // Add user message
             addMessage('user', idea);
-
-            // Clear input
             ideaInput.value = '';
             autoResize();
-
-            // Create AI message
             const aiDiv = document.createElement('div');
             aiDiv.className = 'message ai-message';
             aiDiv.innerHTML = `
@@ -2044,8 +1858,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
             `;
             messagesDiv.appendChild(aiDiv);
             scrollToBottom();
-
-            // Fetch
             fetch('/api/generate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -2055,7 +1867,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let fullResponse = '';
-
                 function read() {
                     reader.read().then(({done, value}) => {
                         if (done) {
@@ -2064,15 +1875,12 @@ APP_TEMPLATE = """<!DOCTYPE html>
                             ideaInput.focus();
                             return;
                         }
-
                         const chunk = decoder.decode(value);
                         const lines = chunk.split('\\n');
-
                         lines.forEach(line => {
                             if (line.startsWith('data: ')) {
                                 try {
                                     const data = JSON.parse(line.slice(6));
-
                                     if (data.type === 'status') {
                                         const statusEl = document.getElementById('statusIndicator');
                                         if (statusEl) {
@@ -2082,7 +1890,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
                                     else if (data.type === 'content') {
                                         const statusEl = document.getElementById('statusIndicator');
                                         if (statusEl) statusEl.remove();
-
                                         fullResponse += data.content;
                                         const responseEl = document.getElementById('currentResponse');
                                         if (responseEl) {
@@ -2094,8 +1901,6 @@ APP_TEMPLATE = """<!DOCTYPE html>
                                         currentMvpId = data.mvp_id;
                                         if (data.has_code) {
                                             showPreview(data.mvp_id);
-                                            
-                                            // Add action buttons
                                             const responseEl = document.getElementById('currentResponse');
                                             const actionsDiv = document.createElement('div');
                                             actionsDiv.className = 'action-buttons';
@@ -2122,11 +1927,9 @@ APP_TEMPLATE = """<!DOCTYPE html>
                                 } catch (e) {}
                             }
                         });
-
                         read();
                     });
                 }
-
                 read();
             })
             .catch(err => {
@@ -2135,62 +1938,53 @@ APP_TEMPLATE = """<!DOCTYPE html>
                 generateBtn.disabled = false;
             });
         }
-
+        
         function showPreview(mvpId) {
             const iframe = document.createElement('iframe');
             iframe.src = `/preview/${mvpId}`;
             previewFrame.innerHTML = '';
             previewFrame.appendChild(iframe);
-            
             currentMvpId = mvpId;
             downloadBtn.style.display = 'inline-flex';
             refreshBtn.style.display = 'inline-flex';
             newWindowBtn.style.display = 'inline-flex';
         }
-
+        
         function downloadProject(mvpId) {
             window.location.href = `/api/download/${mvpId}`;
         }
-
+        
         function addMessage(role, content) {
             const div = document.createElement('div');
             div.className = `message ${role}-message`;
-            
             const roleLabel = role === 'user' ? 'You' : 'Assistant';
-            
             div.innerHTML = `
                 <div class="message-header"><span class="message-role">${roleLabel}</span></div>
                 <div class="message-content">${escapeHtml(content)}</div>
             `;
-            
             messagesDiv.appendChild(div);
             scrollToBottom();
         }
-
+        
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-
+        
         function scrollToBottom() {
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-
-        // Preview actions
+        
         downloadBtn.addEventListener('click', () => {
             if (currentMvpId) downloadProject(currentMvpId);
         });
-
         refreshBtn.addEventListener('click', () => {
             if (currentMvpId) showPreview(currentMvpId);
         });
-
         newWindowBtn.addEventListener('click', () => {
             if (currentMvpId) window.open(`/preview/${currentMvpId}`, '_blank');
         });
-
-        // Focus input
         ideaInput.focus();
     </script>
 </body>
@@ -2200,6 +1994,6 @@ if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting Project-0 Production Server...")
     print("📍 Landing: http://localhost:8000")
-    print("🔐 Authentication: Enabled")
-    print("💾 Database: SQLite (project_zero.db)")
+    print("🔐 Simple Session Auth")
+    print("💾 Database: SQLite")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
