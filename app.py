@@ -165,10 +165,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+        expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": int(expire.timestamp())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -1782,7 +1782,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <!-- Landing Page -->
-    <div class="landing-page" id="landingPage">
+    <div class="landing-page hidden" id="landingPage" style="display: none;">
         <nav class="landing-nav">
             <div class="landing-logo-section">
                 <div class="landing-logo">0</div>
@@ -1968,7 +1968,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </footer>
     </div>
     <!-- Auth Modal -->
-    <div class="auth-overlay" id="authOverlay">
+    <div class="auth-overlay hidden" id="authOverlay">
         <div class="auth-panel">
             <div class="auth-header">
                 <div class="auth-logo">0</div>
@@ -2015,7 +2015,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
     </div>
 
-    <div class="container hidden" id="mainApp">
+        <div class="container hidden" id="mainApp" style="display: none;">
         <!-- Chat Panel -->
         <div class="chat-panel">
             <div class="header">
@@ -2282,8 +2282,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Show App
         function showApp() {
             landingPage.classList.add('hidden');
+            landingPage.style.display = 'none';
             authOverlay.classList.add('hidden');
+            authOverlay.style.display = 'none';
             mainApp.classList.remove('hidden');
+            mainApp.style.display = 'flex';
             
             // Update profile
             profileName.textContent = currentUser.username;
@@ -2319,11 +2322,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
             
             // Show landing page if not authenticated
-            if (!authToken) {
-                landingPage.classList.remove('hidden');
-            }
+            landingPage.style.display = 'block';
+            landingPage.classList.remove('hidden');
         }
 
+        // Initialize on page load
         checkAuth();
 
         // Profile Menu
@@ -2346,7 +2349,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             authToken = null;
             currentUser = null;
             mainApp.classList.add('hidden');
+            mainApp.style.display = 'none';
             landingPage.classList.remove('hidden');
+            landingPage.style.display = 'block';
             profileMenu.classList.remove('show');
         });
 
