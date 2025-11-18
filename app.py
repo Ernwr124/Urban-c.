@@ -21,7 +21,7 @@ import zipfile
 import sqlite3
 import hashlib
 import secrets
-from passlib.context import CryptContext
+import bcrypt
 import jwt
 
 app = FastAPI(title="Project-0 (Production)", description="AI-Powered MVP Generator SaaS")
@@ -39,7 +39,6 @@ SECRET_KEY = secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 # Database Setup
@@ -153,11 +152,13 @@ class Token(BaseModel):
 # Password Hashing
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 # JWT Token Management
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -544,10 +545,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project-0 (Production) - AI MVP Generator SaaS</title>
+    <title>Project-0 - Transform Ideas into Reality</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
         * {
             margin: 0;
@@ -1401,9 +1402,571 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .hidden {
             display: none !important;
         }
+
+        /* Landing Page */
+        .landing-page {
+            min-height: 100vh;
+            background: var(--bg-primary);
+            overflow-y: auto;
+        }
+
+        .landing-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .landing-logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .landing-logo {
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            color: white;
+        }
+
+        .landing-brand {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .landing-nav-btn {
+            padding: 8px 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .landing-nav-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .landing-hero {
+            padding: 140px 40px 100px;
+            text-align: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .landing-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .landing-h1 {
+            font-size: 72px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            color: var(--text-primary);
+            letter-spacing: -2px;
+            animation: fadeInUp 0.8s ease-out 0.1s both;
+        }
+
+        .landing-h1 .highlight {
+            background: linear-gradient(135deg, #000 0%, #525252 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .landing-subtitle {
+            font-size: 24px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto 48px;
+            animation: fadeInUp 1s ease-out 0.2s both;
+        }
+
+        .landing-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 48px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            animation: fadeInUp 1.2s ease-out 0.3s both;
+        }
+
+        .landing-cta:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .landing-features {
+            padding: 80px 40px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .landing-section-title {
+            text-align: center;
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            letter-spacing: -1px;
+        }
+
+        .landing-section-subtitle {
+            text-align: center;
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 60px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 16px;
+            padding: 36px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+            border-color: var(--border-secondary);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--accent);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .feature-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .feature-desc {
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .landing-benefits {
+            padding: 80px 40px;
+        }
+
+        .benefits-list {
+            max-width: 900px;
+            margin: 0 auto;
+            display: grid;
+            gap: 24px;
+        }
+
+        .benefit-item {
+            display: flex;
+            gap: 20px;
+            padding: 28px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .benefit-item:hover {
+            background: var(--bg-tertiary);
+            transform: translateX(8px);
+        }
+
+        .benefit-number {
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .benefit-content h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .benefit-content p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .landing-cta-section {
+            padding: 100px 40px;
+            background: var(--accent);
+            text-align: center;
+        }
+
+        .landing-cta-section h2 {
+            font-size: 56px;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 24px;
+            letter-spacing: -1.5px;
+        }
+
+        .landing-cta-section p {
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 48px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .landing-cta-white {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 48px;
+            background: white;
+            color: var(--accent);
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .landing-cta-white:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .landing-footer {
+            padding: 60px 40px 40px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-primary);
+            text-align: center;
+        }
+
+        .landing-footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .landing-footer-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 18px;
+            color: white;
+        }
+
+        .landing-footer-brand {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .landing-footer-text {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            margin-top: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .landing-h1 {
+                font-size: 42px;
+            }
+            
+            .landing-subtitle {
+                font-size: 18px;
+            }
+            
+            .landing-section-title {
+                font-size: 36px;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Landing Page -->
+    <div class="landing-page" id="landingPage">
+        <nav class="landing-nav">
+            <div class="landing-logo-section">
+                <div class="landing-logo">0</div>
+                <div class="landing-brand">Project-0</div>
+            </div>
+            <button class="landing-nav-btn" onclick="showAuth()">Get Started</button>
+        </nav>
+
+        <section class="landing-hero">
+            <div class="landing-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                Production Ready Platform
+            </div>
+            
+            <h1 class="landing-h1">
+                Transform Your Ideas<br/>
+                Into <span class="highlight">Reality</span>
+            </h1>
+            
+            <p class="landing-subtitle">
+                The ultimate platform for turning concepts into fully functional prototypes. 
+                No coding experience required. Just describe your vision and watch it come to life instantly.
+            </p>
+            
+            <button class="landing-cta" onclick="handleTryNow()">
+                <span>Try It Now</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+            </button>
+        </section>
+
+        <section class="landing-features">
+            <h2 class="landing-section-title">Powerful Features</h2>
+            <p class="landing-section-subtitle">
+                Everything you need to bring your ideas to life, all in one platform
+            </p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3 class="feature-title">Lightning Fast</h3>
+                    <p class="feature-desc">
+                        Generate complete, production-ready prototypes in seconds. 
+                        No waiting, no delays. Just instant results.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <h3 class="feature-title">Beautiful Design</h3>
+                    <p class="feature-desc">
+                        Every prototype follows modern design principles with clean, 
+                        minimalist aesthetics that users love.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3 class="feature-title">Fully Responsive</h3>
+                    <p class="feature-desc">
+                        Your prototypes work perfectly on any device. 
+                        Mobile, tablet, desktop - everything just works.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Secure & Private</h3>
+                    <p class="feature-desc">
+                        Military-grade encryption protects your data. 
+                        Your ideas stay yours, always safe and secure.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">💾</div>
+                    <h3 class="feature-title">Download Anytime</h3>
+                    <p class="feature-desc">
+                        Export your projects as complete, ready-to-deploy packages. 
+                        No vendor lock-in, full ownership.
+                    </p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3 class="feature-title">Production Ready</h3>
+                    <p class="feature-desc">
+                        Generated code is clean, optimized, and ready for production. 
+                        Deploy with confidence.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="landing-benefits">
+            <h2 class="landing-section-title">Why Choose Project-0?</h2>
+            <p class="landing-section-subtitle">
+                Join thousands of innovators who trust Project-0 to bring their visions to reality
+            </p>
+            
+            <div class="benefits-list">
+                <div class="benefit-item">
+                    <div class="benefit-number">1</div>
+                    <div class="benefit-content">
+                        <h3>No Technical Skills Required</h3>
+                        <p>
+                            Simply describe what you want in plain English. Our intelligent system 
+                            understands your vision and creates exactly what you need.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="benefit-item">
+                    <div class="benefit-number">2</div>
+                    <div class="benefit-content">
+                        <h3>Save Weeks of Development Time</h3>
+                        <p>
+                            What normally takes weeks of coding can be done in minutes. 
+                            Focus on your business, not on technical details.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="benefit-item">
+                    <div class="benefit-number">3</div>
+                    <div class="benefit-content">
+                        <h3>Iterate and Improve Rapidly</h3>
+                        <p>
+                            Test different ideas, get instant feedback, and refine your vision. 
+                            Perfect for MVPs, prototypes, and proof of concepts.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="benefit-item">
+                    <div class="benefit-number">4</div>
+                    <div class="benefit-content">
+                        <h3>Professional Quality Results</h3>
+                        <p>
+                            Every output meets professional standards with clean code, 
+                            modern design, and best practices built-in.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="benefit-item">
+                    <div class="benefit-number">5</div>
+                    <div class="benefit-content">
+                        <h3>Complete Creative Freedom</h3>
+                        <p>
+                            From simple landing pages to complex dashboards - if you can imagine it, 
+                            we can build it. No limits, no restrictions.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="landing-cta-section">
+            <h2>Ready to Transform Your Ideas?</h2>
+            <p>
+                Join the future of rapid prototyping. Start creating amazing projects today.
+            </p>
+            <button class="landing-cta-white" onclick="handleTryNow()">
+                <span>Get Started Free</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+            </button>
+        </section>
+
+        <footer class="landing-footer">
+            <div class="landing-footer-logo">
+                <div class="landing-footer-logo-icon">0</div>
+                <div class="landing-footer-brand">Project-0</div>
+            </div>
+            <p class="landing-footer-text">
+                © 2024 Project-0. Transform ideas into reality.
+            </p>
+        </footer>
+    </div>
     <!-- Auth Modal -->
     <div class="auth-overlay" id="authOverlay">
         <div class="auth-panel">
@@ -1582,6 +2145,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let isGenerating = false;
         let currentMvpId = null;
 
+        // Landing Page Control
+        const landingPage = document.getElementById('landingPage');
+
         // Elements
         const authOverlay = document.getElementById('authOverlay');
         const mainApp = document.getElementById('mainApp');
@@ -1696,8 +2262,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         });
 
+        // Show Auth
+        function showAuth() {
+            landingPage.classList.add('hidden');
+            authOverlay.classList.remove('hidden');
+        }
+
+        // Handle Try Now button
+        function handleTryNow() {
+            if (authToken) {
+                // Already logged in, go straight to app
+                checkAuth();
+            } else {
+                // Show auth modal
+                showAuth();
+            }
+        }
+
         // Show App
         function showApp() {
+            landingPage.classList.add('hidden');
             authOverlay.classList.add('hidden');
             mainApp.classList.remove('hidden');
             
@@ -1733,6 +2317,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 localStorage.removeItem('authToken');
                 authToken = null;
             }
+            
+            // Show landing page if not authenticated
+            if (!authToken) {
+                landingPage.classList.remove('hidden');
+            }
         }
 
         checkAuth();
@@ -1757,7 +2346,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             authToken = null;
             currentUser = null;
             mainApp.classList.add('hidden');
-            authOverlay.classList.remove('hidden');
+            landingPage.classList.remove('hidden');
             profileMenu.classList.remove('show');
         });
 
