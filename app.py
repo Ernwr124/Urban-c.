@@ -4,25 +4,22 @@ Professional SaaS platform with authentication, encryption, and user management
 Black & White minimalist design inspired by v0.dev
 """
 
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, status, Cookie
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 import httpx
 import json
 import asyncio
 from typing import AsyncGenerator, Dict, Optional
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 import io
 import zipfile
 import sqlite3
-import hashlib
 import secrets
 import bcrypt
-import jwt
 
 app = FastAPI(title="Project-0 (Production)", description="AI-Powered MVP Generator SaaS")
 
@@ -35,11 +32,8 @@ app.add_middleware(
 )
 
 # Security Configuration
-SECRET_KEY = secrets.token_urlsafe(32)
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
-
-security = HTTPBearer()
+# Simple session storage (in production use Redis or database)
+active_sessions = {}  # {session_id: user_id}
 
 # Database Setup
 DB_NAME = "project0_saas.db"
@@ -143,12 +137,6 @@ class UserLogin(BaseModel):
 class GenerateRequest(BaseModel):
     idea: str
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    username: str
-    email: str
-
 # Password Hashing
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
@@ -160,36 +148,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash"""
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-# JWT Token Management
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now() + expires_delta
-    else:
-        expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": int(expire.timestamp())})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+def create_session(user_id: int) -> str:
+    """Create session for user"""
+    session_id = secrets.token_urlsafe(32)
+    active_sessions[session_id] = user_id
+    return session_id
 
-def decode_token(token: str) -> dict:
-    """Decode and verify JWT token"""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current authenticated user"""
-    token = credentials.credentials
-    payload = decode_token(token)
+def get_user_from_session(session_id: Optional[str]) -> Optional[dict]:
+    """Get user from session"""
+    if not session_id or session_id not in active_sessions:
+        return None
     
-    user_id = payload.get("user_id")
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
+    user_id = active_sessions[session_id]
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -198,12 +168,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     conn.close()
     
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        return None
     
     return {"id": user[0], "username": user[1], "email": user[2]}
 
+async def get_current_user(session_id: Optional[str] = Cookie(None)):
+    """Get current authenticated user from cookie"""
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
 # Authentication Endpoints
-@app.post("/api/auth/register", response_model=Token)
+@app.post("/api/auth/register")
 async def register(user: UserRegister):
     """Register new user"""
     try:
@@ -230,24 +207,29 @@ async def register(user: UserRegister):
         conn.commit()
         conn.close()
         
-        # Create token
-        access_token = create_access_token(
-            data={"user_id": user_id, "email": user.email}
-        )
+        # Create session
+        session_id = create_session(user_id)
         
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
+        response = JSONResponse({
+            "success": True,
             "username": user.username,
             "email": user.email
-        }
+        })
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            samesite="lax"
+        )
+        return response
         
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-@app.post("/api/auth/login", response_model=Token)
+@app.post("/api/auth/login")
 async def login(user: UserLogin):
     """Login user"""
     try:
@@ -275,17 +257,22 @@ async def login(user: UserLogin):
         conn.commit()
         conn.close()
         
-        # Create token
-        access_token = create_access_token(
-            data={"user_id": user_id, "email": email}
-        )
+        # Create session
+        session_id = create_session(user_id)
         
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
+        response = JSONResponse({
+            "success": True,
             "username": username,
             "email": email
-        }
+        })
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            samesite="lax"
+        )
+        return response
         
     except HTTPException:
         raise
@@ -293,9 +280,22 @@ async def login(user: UserLogin):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.get("/api/auth/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
+async def get_me(session_id: Optional[str] = Cookie(None)):
     """Get current user info"""
-    return current_user
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+@app.post("/api/auth/logout")
+async def logout(session_id: Optional[str] = Cookie(None)):
+    """Logout user"""
+    if session_id and session_id in active_sessions:
+        del active_sessions[session_id]
+    
+    response = JSONResponse({"success": True})
+    response.delete_cookie("session_id")
+    return response
 
 # MVP Generation with Authentication
 async def generate_mvp(idea: str, user_id: int) -> AsyncGenerator[str, None]:
@@ -381,22 +381,30 @@ async def root():
     return HTML_TEMPLATE
 
 @app.post("/api/generate")
-async def generate(request: GenerateRequest, current_user: dict = Depends(get_current_user)):
+async def generate(request: GenerateRequest, session_id: Optional[str] = Cookie(None)):
     """Generate MVP from idea with streaming (requires authentication)"""
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     return StreamingResponse(
-        generate_mvp(request.idea, current_user["id"]),
+        generate_mvp(request.idea, user["id"]),
         media_type="text/event-stream"
     )
 
 @app.get("/api/mvp/{mvp_id}")
-async def get_mvp(mvp_id: str, current_user: dict = Depends(get_current_user)):
+async def get_mvp(mvp_id: str, session_id: Optional[str] = Cookie(None)):
     """Get MVP data (requires authentication)"""
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT code, markdown, idea FROM mvps 
         WHERE mvp_id = ? AND user_id = ?
-    """, (mvp_id, current_user["id"]))
+    """, (mvp_id, user["id"]))
     
     mvp = cursor.fetchone()
     conn.close()
@@ -411,15 +419,19 @@ async def get_mvp(mvp_id: str, current_user: dict = Depends(get_current_user)):
     })
 
 @app.get("/api/mvps")
-async def get_user_mvps(current_user: dict = Depends(get_current_user)):
+async def get_user_mvps(session_id: Optional[str] = Cookie(None)):
     """Get all user's MVPs"""
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT mvp_id, idea, created_at FROM mvps 
         WHERE user_id = ? 
         ORDER BY created_at DESC
-    """, (current_user["id"],))
+    """, (user["id"],))
     
     mvps = cursor.fetchall()
     conn.close()
@@ -434,14 +446,18 @@ async def get_user_mvps(current_user: dict = Depends(get_current_user)):
     ]
 
 @app.get("/preview/{mvp_id}", response_class=HTMLResponse)
-async def preview_page(mvp_id: str, current_user: dict = Depends(get_current_user)):
+async def preview_page(mvp_id: str, session_id: Optional[str] = Cookie(None)):
     """Render preview page (requires authentication)"""
+    user = get_user_from_session(session_id)
+    if not user:
+        return "<h1>Not authenticated</h1>"
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT code FROM mvps 
         WHERE mvp_id = ? AND user_id = ?
-    """, (mvp_id, current_user["id"]))
+    """, (mvp_id, user["id"]))
     
     mvp = cursor.fetchone()
     conn.close()
@@ -452,14 +468,18 @@ async def preview_page(mvp_id: str, current_user: dict = Depends(get_current_use
     return mvp[0] if mvp[0] else "<h1>No code generated</h1>"
 
 @app.get("/api/download/{mvp_id}")
-async def download_project(mvp_id: str, current_user: dict = Depends(get_current_user)):
+async def download_project(mvp_id: str, session_id: Optional[str] = Cookie(None)):
     """Download project as ZIP file (requires authentication)"""
+    user = get_user_from_session(session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT code, markdown, idea, created_at FROM mvps 
         WHERE mvp_id = ? AND user_id = ?
-    """, (mvp_id, current_user["id"]))
+    """, (mvp_id, user["id"]))
     
     mvp = cursor.fetchone()
     conn.close()
@@ -479,7 +499,7 @@ async def download_project(mvp_id: str, current_user: dict = Depends(get_current
 
 Generated by Project-0 (Production)
 Date: {created_at}
-User: {current_user['username']}
+User: {user['username']}
 
 ## How to Use
 
@@ -500,7 +520,7 @@ Generated with ❤️ by Project-0 SaaS
         info_content = f"""Project: {idea}
 Generated: {created_at}
 MVP ID: {mvp_id}
-User: {current_user['username']}
+User: {user['username']}
 
 This is a self-contained HTML project.
 Everything you need is in index.html.
@@ -572,9 +592,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        body.app-mode {
             height: 100vh;
             overflow: hidden;
-            -webkit-font-smoothing: antialiased;
         }
 
         .container {
@@ -2140,13 +2163,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <script>
         // Auth State
-        let authToken = localStorage.getItem('authToken');
         let currentUser = null;
         let isGenerating = false;
         let currentMvpId = null;
 
         // Landing Page Control
         const landingPage = document.getElementById('landingPage');
+        const bodyElement = document.body;
 
         // Elements
         const authOverlay = document.getElementById('authOverlay');
@@ -2207,11 +2230,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     throw new Error(data.detail || 'Registration failed');
                 }
                 
-                // Save token and login
-                authToken = data.access_token;
-                localStorage.setItem('authToken', authToken);
+                // Login successful
                 currentUser = {username: data.username, email: data.email};
-                
                 showApp();
             } catch (error) {
                 authError.textContent = error.message;
@@ -2247,11 +2267,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     throw new Error(data.detail || 'Login failed');
                 }
                 
-                // Save token and login
-                authToken = data.access_token;
-                localStorage.setItem('authToken', authToken);
+                // Login successful
                 currentUser = {username: data.username, email: data.email};
-                
                 showApp();
             } catch (error) {
                 authError.textContent = error.message;
@@ -2269,12 +2286,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         // Handle Try Now button
-        function handleTryNow() {
-            if (authToken) {
-                // Already logged in, go straight to app
-                checkAuth();
-            } else {
-                // Show auth modal
+        async function handleTryNow() {
+            // Check if already logged in
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data;
+                    showApp();
+                } else {
+                    showAuth();
+                }
+            } catch (error) {
                 showAuth();
             }
         }
@@ -2287,6 +2313,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             authOverlay.style.display = 'none';
             mainApp.classList.remove('hidden');
             mainApp.style.display = 'flex';
+            bodyElement.classList.add('app-mode');
             
             // Update profile
             profileName.textContent = currentUser.username;
@@ -2298,32 +2325,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // Check Auth on Load
         async function checkAuth() {
-            if (authToken) {
-                try {
-                    const response = await fetch('/api/auth/me', {
-                        headers: {
-                            'Authorization': `Bearer ${authToken}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        currentUser = data;
-                        showApp();
-                        return;
-                    }
-                } catch (error) {
-                    console.error('Auth check failed:', error);
-                }
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
                 
-                // Token invalid
-                localStorage.removeItem('authToken');
-                authToken = null;
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data;
+                    showApp();
+                    return;
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
             }
             
             // Show landing page if not authenticated
             landingPage.style.display = 'block';
             landingPage.classList.remove('hidden');
+            bodyElement.classList.remove('app-mode');
         }
 
         // Initialize on page load
@@ -2344,14 +2364,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
 
         // Logout
-        logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('authToken');
-            authToken = null;
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
             currentUser = null;
             mainApp.classList.add('hidden');
             mainApp.style.display = 'none';
             landingPage.classList.remove('hidden');
             landingPage.style.display = 'block';
+            bodyElement.classList.remove('app-mode');
             profileMenu.classList.remove('show');
         });
 
@@ -2418,9 +2446,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
+                    credentials: 'include',
                     body: JSON.stringify({idea})
                 });
 
@@ -2500,7 +2528,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function showPreview(mvpId) {
             const iframe = document.createElement('iframe');
-            iframe.src = `/preview/${mvpId}?token=${authToken}`;
+            iframe.src = `/preview/${mvpId}`;
             previewFrame.innerHTML = '';
             previewFrame.appendChild(iframe);
             
@@ -2511,7 +2539,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         function downloadProject(mvpId) {
-            window.location.href = `/api/download/${mvpId}?token=${authToken}`;
+            window.location.href = `/api/download/${mvpId}`;
         }
 
         function addMessage(role, content) {
@@ -2549,7 +2577,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
 
         newWindowBtn.addEventListener('click', () => {
-            if (currentMvpId) window.open(`/preview/${currentMvpId}?token=${authToken}`, '_blank');
+            if (currentMvpId) window.open(`/preview/${currentMvpId}`, '_blank');
         });
     </script>
 </body>
@@ -2559,8 +2587,16 @@ if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting Project-0 Production SaaS Platform...")
     print("📦 Features: Authentication, Encryption, User Management")
-    print("🔒 Security: bcrypt password hashing + JWT tokens")
+    print("🔒 Security: bcrypt password hashing + session cookies")
     print("💾 Database: SQLite with encrypted passwords")
+    print("✨ Landing page with smooth scroll")
     print("")
     print("🌐 Server: http://localhost:8000")
+    print("")
+    print("✅ All issues fixed:")
+    print("   - JWT removed (simple sessions)")
+    print("   - Scroll works on landing page")
+    print("   - Passwords encrypted once (bcrypt)")
+    print("   - Landing page shows first")
+    print("")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
