@@ -1,8 +1,6 @@
-flask
-flask_sqlalchemy
-flask_login
-werkzeug
-qrcode
-pillow
-reportlab
-apscheduler
+fastapi
+uvicorn
+httpx
+pydantic
+python-multipart
+python-jose[cryptography]
